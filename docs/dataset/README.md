@@ -54,9 +54,35 @@ The 3 canonical label conflicts:
 - `https://www.tommyhumphreys.com/` (legitimate) vs `http://tommyhumphreys.com/` (phishing)
 - `https://www.google.com/webhp` (legitimate) vs `http://www.google.com/webhp` (phishing)
 
+## Cleaning results (`python -m ml.data_prep`, seed 42)
+
+Implemented in `ml/data_prep.py`, tested in `tests/test_data_prep.py`. Output in `data/processed/` (git-ignored): `train.parquet`, `test.parquet` (columns `url`, `label`), `dropped.csv` (every removed row with its reason), `cleaning_report.json`. Re-running gives byte-identical frames.
+
+| Drop reason | Rows | Notes |
+|---|---|---|
+| `bad_scheme` | 43 | `httpss://` (35) and `ftp://` (8). 36 legitimate, 7 phishing. |
+| `control_chars` | 2 | Both phishing. |
+| `no_hostname` | 3 | Both phishing. |
+| `unparseable` | 1 | `[.]` URL, phishing. |
+| `label_conflict` | 6 | 3 groups, whole group removed (3 legitimate, 3 phishing). |
+| `duplicate` | 12,444 | Canonical duplicates, first occurrence kept. 127 legitimate, **12,317 phishing**. |
+| **Total dropped** | **12,499** | |
+
+| | Legitimate | Phishing | Phishing share |
+|---|---|---|---|
+| Raw | 345,738 | 104,438 | 23.2% |
+| Clean | 345,572 | 92,105 | 21.0% |
+| Train (80%) | 276,457 | 73,684 | 21.0% |
+| Test (20%) | 69,115 | 18,421 | 21.0% |
+
+- **Dedupe removed almost only phishing rows** (11.8% of phishing vs 0.05% of legitimate). The phishing set contained many scheme, `www.` and trailing-slash variants of the same URL. The imbalance is now about 3.75:1, not 3.3:1.
+- The canonical key ignores scheme, so `http://x.com` and `https://x.com` count as the same URL. If a site is phishing on `http` and legitimate on `https`, both rows are dropped as a conflict.
+- Dedupe ran before the split, so no canonical URL appears in both train and test (checked: overlap 0).
+- Whitespace, IP-host, port, `@` and non-ASCII URLs are kept as real signals.
+
 ## Notes for preprocessing
 
-- **Class imbalance (~3.3:1).** Use stratified splits and stratified CV. Report PR-AUC, recall, and FNR, not accuracy alone (the report's Section 3.7 already requires this).
+- **Class imbalance (~3.3:1 raw, ~3.75:1 after cleaning).** Use stratified splits and stratified CV. Report PR-AUC, recall, and FNR, not accuracy alone (the report's Section 3.7 already requires this).
 - **Label normalization.** Labels are lowercase strings. Map to `legitimate`=0 and `phishing`=1 (positive class = phishing).
 - **Canonicalization may expose duplicates.** There are no exact duplicates, but canonicalizing (case, trailing slash, scheme, `www.`) can create near-duplicates and conflicting labels. Re-check after canonicalizing, before the split (report Section 3.4).
 - **Malformed schemes.** 35 `httpss://` URLs. Decide whether to drop or repair them. `urllib.parse` will parse them, but they are likely noise.
@@ -69,7 +95,7 @@ The 3 canonical label conflicts:
 |---|---|
 | Source | "Phishing URL dataset", Version 1, published 2 April 2024. Contributors: Jishnu K S Kaitholikkal and Arthi B. DOI: [10.17632/vfszbj9b36.1](https://doi.org/10.17632/vfszbj9b36.1) (Mendeley Data DOI prefix). Source details were supplied by the user. |
 | License | CC BY 4.0 (supplied by the user). Attribution to the contributors above is required when the dataset is used or redistributed. |
-| Sample count | 450,176 raw. Record the post-cleaning count after preprocessing. |
+| Sample count | 450,176 raw, 437,677 after cleaning (train 350,141 / test 87,536). See "Cleaning results". |
 | Class distribution | 345,738 legitimate / 104,438 phishing (raw). |
 | Label definition | As defined by the original publishers. The labelling method is not in the supplied metadata, so check the DOI page's description. |
 | Duplicate policy | Exact duplicates removed, conflicting labels flagged (none in the raw file). |
