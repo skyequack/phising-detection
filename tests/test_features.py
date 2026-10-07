@@ -3,6 +3,7 @@ import pytest
 from ml.features import (
     FEATURE_GROUPS,
     FEATURE_NAMES,
+    InvalidURLError,
     MAX_URL_LENGTH,
     extract_features,
     extract_matrix,
@@ -14,6 +15,8 @@ BASIC = "https://www.example.com/a/b?x=1&y=2#top"
 def test_schema_has_30_unique_features_in_six_groups():
     assert len(FEATURE_NAMES) == 30 and len(set(FEATURE_NAMES)) == 30
     assert len(FEATURE_GROUPS) == 6
+    flat = [n for g in FEATURE_GROUPS.values() for n in g]
+    assert sorted(flat) == sorted(FEATURE_NAMES)  # every feature in exactly one group
 
 
 def test_output_order_and_determinism():
@@ -94,8 +97,6 @@ def test_ratios_bounded_and_correct():
         "http://ladiesfirst-privileges[.]com/x",  # urlsplit raises ValueError
         "http://#NAME?",
         "http://?",
-        "",
-        "   ",
         "not a url",
         "http://a\x13b.com",
         "http://[::1",
@@ -118,10 +119,19 @@ def test_bracket_fallback_still_finds_host():
 
 def test_length_limit_and_type():
     extract_features("http://x.com/" + "a" * (MAX_URL_LENGTH - 13))
-    with pytest.raises(ValueError):
+    with pytest.raises(InvalidURLError):
         extract_features("http://x.com/" + "a" * MAX_URL_LENGTH)
+    with pytest.raises(InvalidURLError):
+        extract_features("")
+    with pytest.raises(InvalidURLError):
+        extract_features("   ")
     with pytest.raises(ValueError):
         extract_features(None)  # type: ignore[arg-type]
+
+
+def test_sql_injection_string_treated_as_text():
+    f = extract_features("http://x.com/?id=1'; DROP TABLE users;--")
+    assert f["has_query"] == 1 and f["num_query_params"] == 1
 
 
 def test_no_network(monkeypatch):

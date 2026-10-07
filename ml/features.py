@@ -3,7 +3,7 @@
 ``extract_features(url)`` is the single source of truth, used by training and
 by the API. Pure and deterministic, standard library only: no DNS, no HTTP.
 Malformed input never crashes the parser; it falls back to a regex split.
-Inputs longer than ``MAX_URL_LENGTH`` raise ``ValueError`` (the API turns that
+Empty, non-string or over-``MAX_URL_LENGTH`` input raises ``InvalidURLError`` (a ``ValueError``) (the API turns that
 into a validation error).
 """
 
@@ -23,30 +23,33 @@ SCHEMA_VERSION = "1"
 
 # Ordered as in Table 3.2; the model's column order is this order.
 FEATURE_GROUPS: dict[str, tuple[str, ...]] = {
-    "length": ("url_length", "hostname_length", "path_length", "query_length", "path_to_url_ratio"),
+    "length": ("url_length", "hostname_length", "path_length", "query_length"),
     "char_count": (
         "num_digits", "num_letters", "num_special_chars", "num_dots", "num_hyphens",
         "num_slashes", "digit_ratio", "special_char_ratio",
     ),
-    "host_structure": (
-        "num_subdomains", "has_ip_host", "has_at_symbol", "has_port", "has_userinfo",
+    "host": (
+        "num_subdomains", "has_ip_host", "has_port", "has_userinfo", "has_at_symbol",
         "longest_host_token", "has_punycode",
     ),
-    "query_structure": (
-        "has_fragment", "has_query", "num_query_params", "num_encoded_chars",
-        "has_double_slash_path", "longest_path_segment", "has_hex_token",
+    "query_path": (
+        "has_query", "num_query_params", "num_encoded_chars", "has_fragment",
+        "has_double_slash_path", "path_to_url_ratio", "longest_path_segment",
     ),
     "entropy": ("hostname_entropy", "url_entropy"),
-    "keywords": ("suspicious_keyword_count",),
+    "keyword": ("suspicious_keyword_count", "has_hex_token"),
 }
 FEATURE_NAMES: tuple[str, ...] = tuple(n for g in FEATURE_GROUPS.values() for n in g)
 assert len(FEATURE_NAMES) == 30 and len(set(FEATURE_NAMES)) == 30
 
 SUSPICIOUS_KEYWORDS = (
-    "login", "signin", "verify", "secure", "account", "update", "confirm", "password",
-    "banking", "bank", "webscr", "paypal", "ebayisapi", "suspend", "wallet", "billing",
-    "authenticate", "security",
+    "login", "verify", "secure", "account", "update", "bank", "confirm", "signin", "password",
 )
+
+
+class InvalidURLError(ValueError):
+    """Input rejected before parsing (empty, non-string, or too long); the API maps it to 422."""
+
 
 # Second-level labels that, under a 2-letter ccTLD, form a public suffix (co.uk).
 _SLD = {"co", "com", "org", "net", "gov", "edu", "ac", "or", "ne", "go"}
@@ -100,10 +103,12 @@ def _num_subdomains(host: str) -> int:
 def extract_features(url: str) -> dict[str, float]:
     """Compute the 30 Table 3.2 features for one URL, in ``FEATURE_NAMES`` order."""
     if not isinstance(url, str):
-        raise ValueError("url must be a string")
+        raise InvalidURLError("url must be a string")
     url = url.strip()
+    if not url:
+        raise InvalidURLError("url is empty")
     if len(url) > MAX_URL_LENGTH:
-        raise ValueError(f"url longer than {MAX_URL_LENGTH} characters")
+        raise InvalidURLError(f"url longer than {MAX_URL_LENGTH} characters")
 
     netloc, host, path, query, fragment = _split(url)
     n = len(url)
