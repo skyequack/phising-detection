@@ -2,7 +2,7 @@
 
 Checklist against the implementation plan (`~/.claude/plans/okay-now-make-an-mellow-oasis.md`). Last updated 2026-10-07. `[x]` done and verified, `[~]` partly done or needs a decision, `[ ]` not started.
 
-Latest commits: Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f2017`, shortcut fix and retrain `58084cf`, threshold change `85f65be`. 78 tests pass (`.venv\Scripts\python -m pytest -q`).
+Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f2017`, shortcut fix and retrain `58084cf`, threshold change `85f65be`. 84 tests pass (`.venv\Scripts\python -m pytest -q`).
 
 ## Phase 0: Environment
 - [x] Python 3.12 `.venv`, `pyproject.toml` (packages `ml`, `backend`), pinned `requirements.txt`
@@ -19,13 +19,15 @@ Latest commits: Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f20
 - [x] `normalize_url` (scheme, `www.`, trailing slash), schema version 2
 - [x] `tests/test_features.py`; `docs/design/feature-schema.md`
 - [ ] Re-measure extraction throughput for schema v2
+- [ ] UI wording: show the probability as a "model score", not "confidence" (check `frontend/components/Gauge.tsx`)
 
 ## Phase 3: Training and evaluation
 - [x] `ml/preprocessing.py`, `ml/train.py`, `ml/evaluate.py`
 - [x] 5 algorithms tuned (5-fold stratified, random search); SVM on 50k subsample; RF 4 iterations
-- [x] Model selected (Random Forest), threshold chosen on out-of-fold data (0.48, max F1), model frozen with SHA-256
+- [x] Model selected (Random Forest), threshold chosen on out-of-fold data (max F1, now 0.41 after calibration), model frozen with SHA-256
 - [x] Test metrics, confusion matrices, ROC/PR curves, ablation in `reports/`
 - [x] `tests/test_train.py`
+- [x] Calibration (`ml/calibration.py`, `python -m ml.train --calibrate`): isotonic fitted on out-of-fold train predictions; test ECE 0.0246 to 0.0032; threshold re-picked on calibrated scores (0.41); `tests/test_calibration.py`
 - [ ] Re-run `python -m ml.train` with the same seed and confirm identical metrics (about 1 hour)
 - [ ] **Decide on the generalization problem** (see below)
 
@@ -62,12 +64,13 @@ Latest commits: Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f20
 
 ## Where to pick up
 
-1. **Generalization.** Held-out test: F1 0.831, recall 0.827, precision 0.835 (`reports/metrics/test_metrics.json`). On 40 real legitimate URLs the model flags 10 as phishing (25%), and catches 19 of 20 synthetic phishing URLs (`reports/metrics/sanity_check.json`). The single-source legitimate class is narrow. Choose: add a second legitimate source (Tranco) and a second phishing feed and retrain, or keep the dataset and document the limitation. Either way, quote metrics as dataset-specific.
+1. **Generalization.** Held-out test: F1 0.831, recall 0.826, precision 0.836 (`reports/metrics/test_metrics.json`). On 40 real legitimate URLs the model flags 10 as phishing (25%), and catches 19 of 20 synthetic phishing URLs (`reports/metrics/sanity_check.json`). The single-source legitimate class is narrow. Choose: add a second legitimate source (Tranco) and a second phishing feed and retrain, or keep the dataset and document the limitation. Either way, quote metrics as dataset-specific.
 2. **Backend persistence and admin** (Phase 5 unchecked items), then the History / Model Info / Metrics pages.
 3. Security and performance tests, then the remaining docs and report fixes.
 
 ## Disclose in the report
 - First models learned a scheme/`www.` shortcut (F1 about 0.97); fixed by URL normalization; honest F1 about 0.83.
 - SVM trained on a 50k subsample; Random Forest searched 4 iterations vs 8 for the others.
-- Threshold rule changed from max F1 with FNR <= 5% (0.14) to max F1 (0.48) after test results were seen; recorded in `metadata.json`.
+- Threshold rule changed from max F1 with FNR <= 5% (0.14) to max F1 after test results were seen (0.48, then 0.41 on calibrated scores); recorded in `metadata.json`.
+- Probabilities are calibrated in-distribution only (test ECE 0.003) and are overconfident on real-world URLs the dataset does not represent.
 - Subdomain counting uses a small suffix list, not a public-suffix database.

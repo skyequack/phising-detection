@@ -1,6 +1,6 @@
 {
   "model_version": "rf-2026-10-07",
-  "threshold": 0.48,
+  "threshold": 0.41,
   "legit": {
     "n": 40,
     "flagged_phishing": 10,

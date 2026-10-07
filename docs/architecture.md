@@ -114,7 +114,8 @@ flowchart LR
 - **SVM (RBF) is tuned and fitted on a stratified 50,000-row subsample** of the training set (it is O(n^2) to O(n^3)); the other four use all 350,141 training rows. Probabilities come from `CalibratedClassifierCV` (sigmoid). The comparison table must disclose this.
 - **Random Forest used 4 random-search iterations, the others 8** (time budget). Disclose this too.
 - Model selection: best CV F1; among models within 0.002 F1, prefer the more interpretable one (DT, LR, RF, XGB, SVM order). ROC-AUC and PR-AUC are reported but are not part of the rule.
-- **Threshold** is chosen on out-of-fold training predictions (0.10 to 0.90, step 0.01), never on the test set. Final rule: maximum F1 (selected threshold 0.48). The first rule (max F1 subject to FNR <= 5%, giving 0.14) was set before any test result and replaced after test and sanity-set results showed it hurt precision badly. The change is recorded in `metadata.json` (`threshold_history`) and must be disclosed in the report.
+- **Calibration.** Class weights inflate minority-class scores (raw 0.35 meant about 25% phishing). The selected model is wrapped in `ml.calibration.PrefitCalibrated`, a monotone map fitted on out-of-fold training predictions only. Isotonic and Platt are compared by cross-fitted ECE and the better one is kept (isotonic: 0.0024 vs 0.0055). On the test split ECE fell from 0.0246 to 0.0032 and Brier from 0.0528 to 0.0511 (`reports/metrics/calibration.json`, `reports/figures/calibration.png`). F1 is unchanged (0.831), PR-AUC moved 0.9167 to 0.9145 because isotonic creates ties. The other four candidates in the comparison table are uncalibrated.
+- **Threshold** is chosen on out-of-fold training predictions (0.10 to 0.90, step 0.01), never on the test set. Final rule: maximum F1 on the calibrated scores (selected threshold 0.41; 0.48 before calibration). The first rule (max F1 subject to FNR <= 5%, giving 0.14) was set before any test result and replaced after test and sanity-set results showed it hurt precision badly. Every change is recorded in `metadata.json` (`threshold_history`) and must be disclosed in the report.
 - Feature ablation: remove the six groups one at a time and cumulatively (most important first), retraining with fixed hyperparameters; measured on the test split (`reports/metrics/ablation.csv`).
 - Model, fitted preprocessing, and metadata (algorithm, feature schema version, threshold, training date, hyperparameters, metrics) are saved together with joblib.
 
@@ -168,12 +169,12 @@ Four levels: feature-extractor unit tests, integration across frontend/backend/m
 - Cleaning drops artefacts, keeps real signals, and dedupes on a canonical form before the split (see `docs/dataset/README.md`).
 - Feature extraction normalizes scheme, `www.` and a bare trailing slash (section 6). This is a deliberate loss of the http/https signal because it is a pure dataset artefact here.
 - Final feature-to-group assignment (section 6) and the SVM subsample / RF iteration caps (section 7).
-- Explanation: a heuristic, not SHAP. For each feature the backend averages (a) the probability drop when that feature alone is reset to the legitimate-class median and (b) the rise when only that feature is set to its real value on an all-median row. Top 8 shown plus per-group sums. Label it as a heuristic in the UI and report.
+- Explanation: a heuristic, not SHAP. For each feature the backend averages (a) the probability drop when that feature alone is reset to the legitimate-class median and (b) the rise when only that feature is set to its real value on an all-median row. Top 8 shown plus per-group sums. Label it as a heuristic in the UI and report. The probability is calibrated on in-distribution data; the UI should call it a "model score", not a confidence that the site is phishing.
 - Threshold rule and its history (section 7).
 - Backend and ML first, frontend last (the dashboard was built early; `backend/` currently has `main.py` and `service.py` only).
 
 **Open**
-- **Generalization (blocking for a trustworthy demo).** On the held-out split the selected Random Forest scores F1 0.831, recall 0.827, precision 0.835. On 40 hand-made, real, well-known legitimate URLs (`tests/data/sanity_urls.json`, measured by `python -m ml.sanity_check`) it flags 10 as phishing (25%); it catches 19 of 20 synthetic phishing URLs. The legitimate class in the single-source dataset is narrow, so other shortcuts probably remain. Options: add a second legitimate source (for example the Tranco list) and a second phishing feed, rebuild the split and retrain; or keep the dataset and document the limitation.
+- **Generalization (blocking for a trustworthy demo).** On the held-out split the selected, calibrated Random Forest scores F1 0.831, recall 0.826, precision 0.836 at threshold 0.41. On 40 hand-made, real, well-known legitimate URLs (`tests/data/sanity_urls.json`, measured by `python -m ml.sanity_check`) it flags 10 as phishing (25%), four of them with scores of 0.78 or higher even after calibration (calibration holds on the held-out split but not on out-of-distribution URLs); it catches 19 of 20 synthetic phishing URLs. The legitimate class in the single-source dataset is narrow, so other shortcuts probably remain. Options: add a second legitimate source (for example the Tranco list) and a second phishing feed, rebuild the split and retrain; or keep the dataset and document the limitation.
 - Report inconsistencies to fix before submission: it refers to "MCA" in places but is submitted for a PG Diploma in Big Data Analytics, and Section 1.5 points to "Chapter 7" for future work, which is actually Chapter 8. The dataset citation (DOI 10.17632/vfszbj9b36.1, CC BY 4.0) must replace the UCI/PhiUSIIL text.
 - Same-seed reproducibility of `ml.train` has not been re-verified (a full run takes about 1 hour).
 - `ml/predict.py` from the plan was not created; `backend/service.py` contains the prediction and explanation logic. Decide whether to keep it there or extract it.
@@ -190,14 +191,15 @@ phising-detection/
 │   ├── data_prep.py     Phase 1: cleaning + stratified split
 │   ├── features.py      extract_features(url) and normalize_url: single source of truth
 │   ├── preprocessing.py pipelines and search spaces
-│   ├── train.py         tuning, selection, threshold, freeze (--resume, --rethreshold)
-│   ├── evaluate.py      test metrics, figures, ablation
+│   ├── train.py         tuning, selection, threshold, freeze (--resume, --rethreshold, --calibrate)
+│   ├── calibration.py   PrefitCalibrated wrapper, ECE, reliability tables
+│   ├── evaluate.py      test metrics, calibration report, figures, ablation
 │   ├── sanity_check.py  hand-made real-world smoke check
 │   └── models/          phishing_model.joblib (git-ignored), candidate_*.joblib, metadata.json
 ├── data/
 │   ├── raw/             URL dataset.csv (git-ignored)
 │   └── processed/       train/test parquet, feature caches, cleaning report (git-ignored)
-├── tests/               test_data_prep, test_features, test_train, test_model, test_api; data/sanity_urls.json
+├── tests/               test_data_prep, test_features, test_train, test_calibration, test_model, test_api; data/sanity_urls.json
 ├── reports/
 │   ├── figures/         confusion matrices, ROC, PR, threshold sweep, ablation
 │   └── metrics/         cv_results, test_metrics, test_comparison, ablation, threshold_sweep, chosen_threshold, sanity_check

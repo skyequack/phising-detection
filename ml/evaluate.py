@@ -4,8 +4,8 @@ Usage: python -m ml.evaluate [--no-ablation]   (skip the slow ablation, keep the
 
 The test split is read only here, after ml.train froze the model: the stored
 SHA-256 of phishing_model.joblib must match, or this script refuses to run.
-Outputs: reports/metrics/test_metrics.json, test_comparison.csv, ablation.csv;
-reports/figures/confusion_matrices.png, roc_curves.png, pr_curves.png, ablation.png.
+Outputs: reports/metrics/test_metrics.json, test_comparison.csv, ablation.csv, calibration.json, calibration_test.csv;
+reports/figures/confusion_matrices.png, calibration.png, roc_curves.png, pr_curves.png, ablation.png.
 The selected model's test metrics are also written back into metadata.json.
 """
 
@@ -26,6 +26,7 @@ from sklearn.metrics import (
     precision_score, recall_score, roc_auc_score, roc_curve,
 )
 
+from ml.calibration import calibration_metrics, reliability_table
 from ml.preprocessing import ALGORITHMS, NAMES, build_pipeline
 from ml.train import FIGURES, METRICS, MODELS, PROCESSED, SVM_CAP, SEED, _sha256, load_features
 
@@ -116,9 +117,28 @@ def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METR
         est = joblib.load(models / f"candidate_{algo}.joblib")
         probas[algo] = _score(est, Xt)
         table[algo] = compute_metrics(yt, probas[algo], 0.5)
-    tuned = compute_metrics(yt, probas[chosen], thr)
+    final = joblib.load(models / "phishing_model.joblib")  # calibrated wrapper (or plain pipeline)
+    final_p = _score(final, Xt)
+    tuned = compute_metrics(yt, final_p, thr)
 
-    out = {"test_rows": len(yt), "selected": chosen, "all_models_at_0.5": table, "selected_at_chosen_threshold": tuned}
+    # Calibration of the selected model on the test split: raw candidate vs frozen final model.
+    calib = {"raw": calibration_metrics(yt, probas[chosen]), "final": calibration_metrics(yt, final_p),
+             "method": meta.get("calibration", {}).get("method")}
+    rel = {"raw": reliability_table(yt, probas[chosen]), "final": reliability_table(yt, final_p)}
+    pd.concat([t.assign(model=k) for k, t in rel.items()]).to_csv(metrics / "calibration_test.csv", index=False)
+    (metrics / "calibration.json").write_text(json.dumps(calib, indent=2), encoding="utf-8")
+    fig, ax = plt.subplots(figsize=(4.5, 4.5))
+    ax.plot([0, 1], [0, 1], "k--", lw=1, label="perfect")
+    for k, t in rel.items():
+        ax.plot(t["mean_pred"], t["actual_phishing"], marker="o", label=f"{k} (ECE {calib[k]['ece']:.3f})")
+    ax.set(xlabel="Mean predicted probability", ylabel="Actual phishing share", title=f"Reliability ({NAMES[chosen]}, test)")
+    ax.legend(fontsize=7)
+    fig.savefig(figures / "calibration.png", dpi=150, bbox_inches="tight")
+    plt.close(fig)
+
+    out = {"test_rows": len(yt), "selected": chosen, "all_models_at_0.5": table,
+           "all_models_note": "uncalibrated candidates at 0.5", "selected_at_chosen_threshold": tuned,
+           "calibration": calib}
     (metrics / "test_metrics.json").write_text(json.dumps(out, indent=2), encoding="utf-8")
     flat = [{"model": NAMES[a], **{k: v for k, v in m.items() if k != "confusion_matrix"}} for a, m in table.items()]
     flat.append({"model": f"{NAMES[chosen]} @ tuned threshold",
@@ -151,6 +171,7 @@ def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METR
     meta["test_metrics"] = tuned
     (models / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(pd.DataFrame(flat).round(4).to_string(index=False))
+    print(json.dumps(calib, indent=1))
     if ablate:
         print(abl.round(4).to_string(index=False))
     return out

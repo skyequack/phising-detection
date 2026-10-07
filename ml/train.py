@@ -34,6 +34,7 @@ from sklearn.metrics import f1_score, precision_score, recall_score
 from sklearn.model_selection import RandomizedSearchCV, StratifiedKFold, cross_val_predict, train_test_split
 
 from ml import features as F
+from ml.calibration import PrefitCalibrated, calibration_metrics, choose_method, fit_calibrator
 from ml.preprocessing import ALGORITHMS, INTERPRETABILITY, NAMES, SEARCH_SPACES, SEED, build_pipeline, set_params
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,6 +151,64 @@ def feature_importance(est, X: pd.DataFrame, y: pd.Series) -> dict[str, float]:
     return dict(zip(X.columns, map(float, imp)))
 
 
+def calibrate_artifacts(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METRICS,
+                        figures: Path = FIGURES, svm_cap: int = SVM_CAP) -> dict:
+    """Calibrate the selected model on out-of-fold TRAIN predictions and re-freeze it.
+
+    Fits isotonic and Platt maps, keeps the one with the lower cross-fitted ECE,
+    re-picks the max-F1 threshold on the calibrated OOF scores, rewrites
+    phishing_model.joblib (a ``PrefitCalibrated`` wrapper), the sweep files and
+    metadata.json. The test split is not read.
+    """
+    meta_path = models / "metadata.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    chosen = meta["algorithm"]
+    X, y = load_features("train", processed)
+    Xa, ya = (X, y) if chosen != "svm" or len(X) <= svm_cap else train_test_split(
+        X, y, train_size=svm_cap, stratify=y, random_state=SEED)[::2]
+    base = joblib.load(models / f"candidate_{chosen}.joblib")  # uncalibrated, fitted on Xa
+    oof_path = processed / f"oof_{chosen}.npy"
+    if oof_path.exists() and len(np.load(oof_path)) == len(ya):
+        oof = np.load(oof_path)
+    else:
+        cv = StratifiedKFold(CV_FOLDS, shuffle=True, random_state=SEED)
+        oof = cross_val_predict(clone(base), Xa, ya, cv=cv, method="predict_proba",
+                                n_jobs=1 if chosen in ("rf", "xgb") else -1)[:, 1]
+        np.save(oof_path, oof)
+    yv = ya.to_numpy()
+
+    method, cv_ece = choose_method(oof, yv)
+    wrapped = PrefitCalibrated(base, fit_calibrator(oof, yv, method), method)
+    cal = wrapped.calibrate(oof)
+    before, after = calibration_metrics(yv, oof), calibration_metrics(yv, cal)
+
+    old = meta["threshold"]
+    sweep = sweep_thresholds(yv, cal)
+    thr = choose_threshold(sweep, None)
+    sweep.to_csv(metrics / "threshold_sweep.csv", index=False)
+    (metrics / "chosen_threshold.json").write_text(json.dumps({"algo": chosen, **thr}, indent=2), encoding="utf-8")
+    ax = sweep.set_index("threshold")[["precision", "recall", "f1"]].plot(figsize=(6, 4))
+    ax.axvline(thr["threshold"], color="k", ls="--", lw=1)
+    ax.set_title(f"{NAMES[chosen]}: out-of-fold threshold sweep (calibrated)")
+    ax.figure.savefig(figures / "threshold_sweep.png", dpi=150, bbox_inches="tight")
+    plt.close(ax.figure)
+
+    model_path = models / "phishing_model.joblib"
+    joblib.dump(wrapped, model_path)
+    meta.setdefault("threshold_history", []).append(
+        {"previous": old, "new_rule": thr["rule"], "reason": "re-picked on calibrated out-of-fold scores",
+         "changed_after_test_results_seen": (metrics / "test_metrics.json").exists()})
+    meta.update({
+        "threshold": thr, "model_sha256": _sha256(model_path), "test_metrics": None,
+        "calibration": {"method": method, "fitted_on": "out-of-fold train predictions", "n": int(len(yv)),
+                        "cv_ece_by_method": cv_ece, "oof_before": before, "oof_after_in_sample": after},
+    })
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    print(f"calibrated with {method}: OOF ECE {before['ece']:.4f} -> {after['ece']:.4f} (in-sample); "
+          f"threshold {old['threshold']} -> {thr['threshold']}")
+    return meta["calibration"]
+
+
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -218,6 +277,7 @@ def run(n_iter: int = N_ITER, svm_cap: int = SVM_CAP, quick: bool = False, resum
         X, y, train_size=svm_cap, stratify=y, random_state=SEED)[::2]
     oof = cross_val_predict(clone(fitted[chosen]), Xa, ya, cv=cv, method="predict_proba",
                             n_jobs=1 if chosen in ("rf", "xgb") else -1)[:, 1]
+    np.save(processed / f"oof_{chosen}.npy", oof)  # reused by calibrate_artifacts
     sweep = sweep_thresholds(ya.to_numpy(), oof)
     thr = choose_threshold(sweep)
     sweep.to_csv(metrics / "threshold_sweep.csv", index=False)
@@ -255,8 +315,12 @@ def main() -> None:
     p.add_argument("--svm-cap", type=int, default=SVM_CAP)
     p.add_argument("--resume", action="store_true", help="skip tuning; reuse saved cv_results.csv and candidates")
     p.add_argument("--rethreshold", choices=["max_f1", "fnr"], help="re-pick the threshold from the saved OOF sweep and exit")
+    p.add_argument("--calibrate", action="store_true", help="calibrate the selected model on OOF train predictions and exit")
     p.add_argument("--quick", action="store_true", help="smoke test on 20k rows, 2 iterations")
     a = p.parse_args()
+    if a.calibrate:
+        calibrate_artifacts(svm_cap=a.svm_cap)
+        return
     if a.rethreshold:
         print(rethreshold(None if a.rethreshold == "max_f1" else TARGET_FNR))
         return
