@@ -1,0 +1,259 @@
+{
+  "algorithm": "svm",
+  "algorithm_name": "SVM (RBF)",
+  "feature_schema_version": "1",
+  "features_source_hash": "dd1159e8",
+  "feature_names": [
+    "url_length",
+    "hostname_length",
+    "path_length",
+    "query_length",
+    "num_digits",
+    "num_letters",
+    "num_special_chars",
+    "num_dots",
+    "num_hyphens",
+    "num_slashes",
+    "digit_ratio",
+    "special_char_ratio",
+    "num_subdomains",
+    "has_ip_host",
+    "has_port",
+    "has_userinfo",
+    "has_at_symbol",
+    "longest_host_token",
+    "has_punycode",
+    "has_query",
+    "num_query_params",
+    "num_encoded_chars",
+    "has_fragment",
+    "has_double_slash_path",
+    "path_to_url_ratio",
+    "longest_path_segment",
+    "hostname_entropy",
+    "url_entropy",
+    "suspicious_keyword_count",
+    "has_hex_token"
+  ],
+  "feature_groups": {
+    "length": [
+      "url_length",
+      "hostname_length",
+      "path_length",
+      "query_length"
+    ],
+    "char_count": [
+      "num_digits",
+      "num_letters",
+      "num_special_chars",
+      "num_dots",
+      "num_hyphens",
+      "num_slashes",
+      "digit_ratio",
+      "special_char_ratio"
+    ],
+    "host": [
+      "num_subdomains",
+      "has_ip_host",
+      "has_port",
+      "has_userinfo",
+      "has_at_symbol",
+      "longest_host_token",
+      "has_punycode"
+    ],
+    "query_path": [
+      "has_query",
+      "num_query_params",
+      "num_encoded_chars",
+      "has_fragment",
+      "has_double_slash_path",
+      "path_to_url_ratio",
+      "longest_path_segment"
+    ],
+    "entropy": [
+      "hostname_entropy",
+      "url_entropy"
+    ],
+    "keyword": [
+      "suspicious_keyword_count",
+      "has_hex_token"
+    ]
+  },
+  "threshold": {
+    "threshold": 0.38,
+    "rule": "max_f1_subject_to_fnr",
+    "target_fnr": 0.05,
+    "precision": 0.9738016136687233,
+    "recall": 0.9750047519482988,
+    "f1": 0.9744028114166311,
+    "fnr": 0.02499524805170117
+  },
+  "trained_at": "2026-10-07T13:27:38+00:00",
+  "seed": 42,
+  "cv_folds": 5,
+  "n_iter": 8,
+  "quick": false,
+  "resumed_from_saved_search": true,
+  "hyperparameters": {
+    "clf__C": 15.702970884055382,
+    "clf__gamma": 0.06251373574521749
+  },
+  "candidates": [
+    {
+      "algo": "lr",
+      "params": {
+        "clf__C": 56.69849511478853
+      },
+      "cv_ap": 0.9921819525649036,
+      "cv_f1": 0.9710486045651676,
+      "cv_roc_auc": 0.994679997823712,
+      "train_rows": 350141,
+      "seconds": 41.1
+    },
+    {
+      "algo": "dt",
+      "params": {
+        "clf__max_depth": null,
+        "clf__min_samples_leaf": 50
+      },
+      "cv_ap": 0.9630904104020814,
+      "cv_f1": 0.8878980742786465,
+      "cv_roc_auc": 0.9811206660724642,
+      "train_rows": 350141,
+      "seconds": 26.9
+    },
+    {
+      "algo": "rf",
+      "params": {
+        "clf__n_estimators": 300,
+        "clf__max_depth": null,
+        "clf__min_samples_leaf": 1,
+        "clf__max_features": "sqrt"
+      },
+      "cv_ap": 0.989734941295201,
+      "cv_f1": 0.9495967544170336,
+      "cv_roc_auc": 0.9960707634332124,
+      "train_rows": 350141,
+      "seconds": 73.4
+    },
+    {
+      "algo": "svm",
+      "params": {
+        "clf__C": 15.702970884055382,
+        "clf__gamma": 0.06251373574521749
+      },
+      "cv_ap": 0.991784436723684,
+      "cv_f1": 0.974193245616252,
+      "cv_roc_auc": 0.9949497437876442,
+      "train_rows": 50000,
+      "seconds": 242.5
+    },
+    {
+      "algo": "xgb",
+      "params": {
+        "clf__n_estimators": 357,
+        "clf__max_depth": 7,
+        "clf__learning_rate": 0.1342795037777719,
+        "clf__subsample": 0.8887995089067299
+      },
+      "cv_ap": 0.9937677558536968,
+      "cv_f1": 0.9709199039195688,
+      "cv_roc_auc": 0.9971641314410558,
+      "train_rows": 350141,
+      "seconds": 3.2
+    }
+  ],
+  "train_rows": 350141,
+  "model_train_rows": 50000,
+  "feature_importance": {
+    "url_length": 0.11051799556166099,
+    "hostname_length": 0.11341702761849712,
+    "path_length": 0.08350197702198987,
+    "query_length": 0.05992892896653898,
+    "num_digits": 0.011846897812777524,
+    "num_letters": 0.11533378310324696,
+    "num_special_chars": 0.11794698327666302,
+    "num_dots": 0.003911270384822487,
+    "num_hyphens": 0.0017366372625991517,
+    "num_slashes": 0.004724775732547014,
+    "digit_ratio": 0.00164716297537981,
+    "special_char_ratio": 0.08922628388597433,
+    "num_subdomains": 0.09534214283004731,
+    "has_ip_host": 0.00035409894987197547,
+    "has_port": 0.0003565207488706721,
+    "has_userinfo": 0.0,
+    "has_at_symbol": 7.856764201405464e-05,
+    "longest_host_token": 0.05445803402600438,
+    "has_punycode": 0.0,
+    "has_query": 0.011000716045008511,
+    "num_query_params": 0.0011687449984992269,
+    "num_encoded_chars": 0.0001612126912784625,
+    "has_fragment": 0.0002868407978816049,
+    "has_double_slash_path": 5.377386550492572e-06,
+    "path_to_url_ratio": 0.1188629223342188,
+    "longest_path_segment": 0.0005491254649743156,
+    "hostname_entropy": 0.0010213718602742118,
+    "url_entropy": 0.0009759132527579517,
+    "suspicious_keyword_count": 0.0012687958931137501,
+    "has_hex_token": 0.00036989147593701713
+  },
+  "group_importance": {
+    "length": 0.36736592916868693,
+    "char_count": 0.3463737944340103,
+    "host": 0.1505893641968084,
+    "query_path": 0.1320349397184114,
+    "entropy": 0.0019972851130321636,
+    "keyword": 0.0016386873690507672
+  },
+  "legit_medians": {
+    "url_length": 53.0,
+    "hostname_length": 19.0,
+    "path_length": 23.0,
+    "query_length": 0.0,
+    "num_digits": 0.0,
+    "num_letters": 41.0,
+    "num_special_chars": 10.0,
+    "num_dots": 3.0,
+    "num_hyphens": 0.0,
+    "num_slashes": 4.0,
+    "digit_ratio": 0.0,
+    "special_char_ratio": 0.18292682926829268,
+    "num_subdomains": 1.0,
+    "has_ip_host": 0.0,
+    "has_port": 0.0,
+    "has_userinfo": 0.0,
+    "has_at_symbol": 0.0,
+    "longest_host_token": 9.0,
+    "has_punycode": 0.0,
+    "has_query": 0.0,
+    "num_query_params": 0.0,
+    "num_encoded_chars": 0.0,
+    "has_fragment": 0.0,
+    "has_double_slash_path": 0.0,
+    "path_to_url_ratio": 0.44680851063829785,
+    "longest_path_segment": 13.0,
+    "hostname_entropy": 3.3492750707107133,
+    "url_entropy": 4.3131519203061375,
+    "suspicious_keyword_count": 0.0,
+    "has_hex_token": 0.0
+  },
+  "model_sha256": "e30b0cfe9bce58f538c06477b04a5cc5238fc833d5fc8f74c4e6cee2d52168d7",
+  "frozen": true,
+  "test_metrics": {
+    "threshold": 0.38,
+    "accuracy": 0.9898784500091391,
+    "precision": 0.9755899104963385,
+    "recall": 0.9763313609467456,
+    "f1": 0.9759604948990667,
+    "specificity": 0.9934891123489836,
+    "fnr": 0.023668639053254437,
+    "roc_auc": 0.9949124506929045,
+    "pr_auc": 0.9921399933619753,
+    "confusion_matrix": {
+      "tn": 68665,
+      "fp": 450,
+      "fn": 436,
+      "tp": 17985
+    }
+  }
+}

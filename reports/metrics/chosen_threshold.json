@@ -1,0 +1,10 @@
+{
+  "algo": "svm",
+  "threshold": 0.38,
+  "rule": "max_f1_subject_to_fnr",
+  "target_fnr": 0.05,
+  "precision": 0.9738016136687233,
+  "recall": 0.9750047519482988,
+  "f1": 0.9744028114166311,
+  "fnr": 0.02499524805170117
+}
