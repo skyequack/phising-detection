@@ -80,13 +80,28 @@ Implemented in `ml/data_prep.py`, tested in `tests/test_data_prep.py`. Output in
 - Dedupe ran before the split, so no canonical URL appears in both train and test (checked: overlap 0).
 - Whitespace, IP-host, port, `@` and non-ASCII URLs are kept as real signals.
 
+## Shortcut signals (found after the first model, 2026-10-07)
+
+The first models scored 97-99% F1, but they flagged ordinary sites such as `https://github.com` as phishing. Measured on the training split:
+
+| Signal | Legitimate | Phishing |
+|---|---|---|
+| Scheme is `https` | 100.0% | 6.4% |
+| Host starts with `www.` | 99.8% | 8.1% |
+| Bare two-label host (`example.com`) | 0.1% | 57.1% |
+| URL is `scheme://host/` only (lone trailing slash) | 13.0% | 5.4% |
+
+A model can score highly on this dataset by learning "not `https://www.` means phishing". Those scores do not carry over to real URLs. Fix: `ml/features.py` normalizes every URL before extracting features (scheme forced to `http://`, leading `www.` and a lone trailing `/` removed), see `docs/design/feature-schema.md`. After the fix the held-out F1 fell from about 0.97 to 0.83. The model cannot use the http/https distinction at all, which is a real loss in practice but a pure artefact here.
+
+Remaining concern: the legitimate class comes from one collection source and is narrow. On 40 hand-made real legitimate URLs (`tests/data/sanity_urls.json`) the final model still flags 10 (25%). Treat all reported metrics as describing this dataset only, and state that in the report. A second legitimate source (for example the Tranco list) and a second phishing feed would address it (not done, needs downloads).
+
 ## Notes for preprocessing
 
-- **Class imbalance (~3.3:1 raw, ~3.75:1 after cleaning).** Use stratified splits and stratified CV. Report PR-AUC, recall, and FNR, not accuracy alone (the report's Section 3.7 already requires this).
+- **Class imbalance (~3.3:1 raw, ~3.75:1 after cleaning).** Stratified splits and stratified 5-fold CV are used; imbalance is handled with class weights. Report PR-AUC, recall, and FNR, not accuracy alone (the report's Section 3.7 already requires this).
 - **Label normalization.** Labels are lowercase strings. Map to `legitimate`=0 and `phishing`=1 (positive class = phishing).
 - **Canonicalization may expose duplicates.** There are no exact duplicates, but canonicalizing (case, trailing slash, scheme, `www.`) can create near-duplicates and conflicting labels. Re-check after canonicalizing, before the split (report Section 3.4).
 - **Malformed schemes.** 35 `httpss://` URLs. Decide whether to drop or repair them. `urllib.parse` will parse them, but they are likely noise.
-- **Collection-bias check.** Measured: 85.0% of legitimate and 91.6% of phishing URLs have a path, and 13.3% / 18.7% have a query, so structure alone doesn't trivially separate the classes. The two classes may still differ systematically (for example, the top of the file looks like popular-site bare hosts), so check the path and query feature groups in the ablation study and mention it as a limitation.
+- **Collection-bias check.** Measured: 85.0% of legitimate and 91.6% of phishing URLs have a path, and 13.3% / 18.7% have a query, so structure alone doesn't trivially separate the classes. The two classes may still differ systematically (for example, the top of the file looks like popular-site bare hosts), so check the path and query feature groups in the ablation study and mention it as a limitation. See "Shortcut signals" above: the collection bias turned out to be much larger than this check suggested.
 - **Order.** The file looks sorted by label (legitimate first). Shuffle with a fixed seed before any non-stratified operation.
 
 ## Table 3.1 status

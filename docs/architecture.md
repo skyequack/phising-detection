@@ -1,5 +1,7 @@
 # Architecture: Phishing Website Detection Using URL Lexical Analysis
 
+> **Status:** see [PROGRESS.md](PROGRESS.md) for what is built. Results quoted below come from `reports/metrics/`.
+
 Source of truth: `docs/reference/Phishing_Detection_Report_VTU_Format.pdf` and `docs/reference/Phishing_Detection_Project_Synopsis.pdf` (Chapters 3-5). Choices made on top of the report are listed in [Decisions](#12-decisions-and-open-questions).
 
 ## 1. Overview
@@ -37,7 +39,7 @@ Everything runs on the local machine. The dotted line is a hard constraint: no c
 ## 4. Layers and components
 
 | Layer | Location | Responsibility |
-|---|---|---|
+|---|---|---|---|
 | Frontend | `frontend/` | Next.js, React, TypeScript, Tailwind. Pages: Detector, Result, History, Model Information, Metrics. Client-side validation before the request. |
 | Backend | `backend/` | FastAPI + Uvicorn. Routes, Pydantic request/response schemas, auth for admin routes, DB access through the ORM, audit logging. Loads model and metadata once at startup. |
 | ML engine | `ml/` | `features.py` (`extract_features(url)`, the single source of truth), `preprocessing.py`, `train.py`, `evaluate.py`, `predict.py`. |
@@ -78,7 +80,8 @@ The threshold is not fixed at 0.5. It is chosen from the precision/recall/F1 cur
 
 - One pure, deterministic function: `extract_features(url) -> fixed-schema vector`. The same URL always gives the same vector.
 - Uses only Python's standard library (`urllib.parse`). No DNS and no HTTP.
-- About 30 features in six groups, which are also the groups used in the ablation study: length, character counts, host structure, query structure, entropy, suspicious keywords. The full schema is in the report's Table 3.2. It will be recorded in `docs/design/feature-schema.md`.
+- Features are computed on a **normalized URL**: scheme forced to `http://`, leading `www.` removed, lone trailing `/` removed. In the training data 100% of legitimate URLs are `https` and 99.8% start with `www.` (phishing: 6.4% and 8.1%), so these signals let a model separate the classes without learning anything about phishing. Details in `docs/design/feature-schema.md`.
+- About 30 features in six groups, which are also the groups used in the ablation study: length, character counts, host structure, query structure, entropy, suspicious keywords. The full schema is in the report's Table 3.2 and `docs/design/feature-schema.md` (final group assignment: length 4, char_count 8, host 7, query_path 7, entropy 2, keyword 2).
 - Source-dataset columns that cannot be derived from the URL string (for example, external links or form presence) are dropped before training.
 
 ## 7. Training pipeline
@@ -98,7 +101,7 @@ flowchart LR
 ```
 
 | Algorithm | Tuned hyperparameters | Scaling |
-|---|---|---|
+|---|---|---|---|
 | Logistic Regression | `C` | StandardScaler |
 | Decision Tree | `max_depth`, `min_samples_leaf` | none |
 | Random Forest | `n_estimators`, `max_depth`, `min_samples_leaf`, `max_features` | none |
@@ -107,36 +110,41 @@ flowchart LR
 
 - Metrics: accuracy, precision, recall, F1, specificity, false-negative rate, ROC-AUC, PR-AUC. FNR gets particular attention because a missed phishing URL is the costly error.
 - If two models are close on F1 and ROC-AUC, pick the more interpretable one.
-- Feature ablation: remove the six groups progressively and measure the change.
+- Imbalance is handled with class weights (`class_weight="balanced"`, `scale_pos_weight` for XGBoost), not resampling.
+- **SVM (RBF) is tuned and fitted on a stratified 50,000-row subsample** of the training set (it is O(n^2) to O(n^3)); the other four use all 350,141 training rows. Probabilities come from `CalibratedClassifierCV` (sigmoid). The comparison table must disclose this.
+- **Random Forest used 4 random-search iterations, the others 8** (time budget). Disclose this too.
+- Model selection: best CV F1; among models within 0.002 F1, prefer the more interpretable one (DT, LR, RF, XGB, SVM order). ROC-AUC and PR-AUC are reported but are not part of the rule.
+- **Threshold** is chosen on out-of-fold training predictions (0.10 to 0.90, step 0.01), never on the test set. Final rule: maximum F1 (selected threshold 0.48). The first rule (max F1 subject to FNR <= 5%, giving 0.14) was set before any test result and replaced after test and sanity-set results showed it hurt precision badly. The change is recorded in `metadata.json` (`threshold_history`) and must be disclosed in the report.
+- Feature ablation: remove the six groups one at a time and cumulatively (most important first), retraining with fixed hyperparameters; measured on the test split (`reports/metrics/ablation.csv`).
 - Model, fitted preprocessing, and metadata (algorithm, feature schema version, threshold, training date, hyperparameters, metrics) are saved together with joblib.
 
 ## 8. Data model
 
-SQLite through SQLAlchemy. All access goes through the ORM (parameterized queries).
+SQLite through SQLAlchemy. All access goes through the ORM (parameterized queries). **Four entities, no `users` table**: admin access is a single static bearer token from the `ADMIN_TOKEN` environment variable, so `audit_logs.actor` is a label string. *(Planned; the database is not built yet.)*
 
 ```mermaid
 erDiagram
-    users ||--o{ audit_logs : performs
     models ||--o{ predictions : produced_by
     predictions ||--|| feature_snapshots : has
-    users { int id PK  string username  string password_hash  string role }
     models { int id PK  string version  string algorithm  datetime trained_at  bool active  json metrics }
     predictions { int id PK  string url_hash  string label  float probability  int model_id FK  datetime created_at }
     feature_snapshots { int id PK  int prediction_id FK  json features }
-    audit_logs { int id PK  int user_id FK  string action  string outcome  datetime created_at }
+    audit_logs { int id PK  string actor  string action  string outcome  datetime created_at }
 ```
 
-Raw URLs are not stored, only a hash. The column sets above are a starting point and are not fixed by the report (see section 12).
+Raw URLs are not stored, only an HMAC-SHA256 of the canonicalized URL keyed by `URL_HASH_KEY`, so hashes cannot be reversed by dictionary lookup. The column sets are a starting point and are not fixed by the report.
 
 ## 9. API
 
-| Endpoint | Access | Purpose |
-|---|---|---|
-| `POST /predict` | public (rate-limitable) | `{url}` returns `label`, `probability`, `model_version`, `features`, `explanation`. |
-| `GET /models` | public | Model info (algorithm, training date, metrics). |
-| `GET /predictions` | public | Prediction history. |
-| `GET /metrics/{model_version}` | public | Confusion matrix, ROC/PR data, comparison table. |
-| Training / model activation | **authenticated admin only** | Never part of the public prediction flow. Audited. |
+| Endpoint | Access | Purpose | State |
+|---|---|---|---|
+| `POST /predict` | public (rate-limitable) | `{url}` returns `label`, `probability`, `model_version`, `features`, `explanation`. | built |
+| `GET /models` | public | Model info (algorithm, training date, metrics). | built |
+| `GET /predictions` | public | Prediction history. | planned |
+| `GET /metrics/{model_version}` | public | Confusion matrix, ROC/PR data, comparison table. | partly built (`GET /metrics`, no version path) |
+| Training / model activation | **authenticated admin only** | Never part of the public prediction flow. Audited. | planned |
+
+`GET /health` (built) reports whether the model loaded.
 
 ## 10. Security design
 
@@ -153,43 +161,52 @@ Four levels: feature-extractor unit tests, integration across frontend/backend/m
 ## 12. Decisions and open questions
 
 **Decided**
-- SQLite via SQLAlchemy (the report allows PostgreSQL or SQLite). It has no setup, is fully local, and can move to PostgreSQL later.
+- SQLite via SQLAlchemy (the report allows PostgreSQL or SQLite). No setup, fully local, can move to PostgreSQL later.
 - Project scaffolded directly in the repo root, with the report's four top-level directories plus `data/`, `reports/`, and `docs/`.
+- Python 3.12 venv; versions pinned in `requirements.txt`.
+- Admin auth: one static bearer token (`ADMIN_TOKEN`), compared with `secrets.compare_digest`. No `users` table.
+- Cleaning drops artefacts, keeps real signals, and dedupes on a canonical form before the split (see `docs/dataset/README.md`).
+- Feature extraction normalizes scheme, `www.` and a bare trailing slash (section 6). This is a deliberate loss of the http/https signal because it is a pure dataset artefact here.
+- Final feature-to-group assignment (section 6) and the SVM subsample / RF iteration caps (section 7).
+- Explanation: a heuristic, not SHAP. For each feature the backend averages (a) the probability drop when that feature alone is reset to the legitimate-class median and (b) the rise when only that feature is set to its real value on an all-median row. Top 8 shown plus per-group sums. Label it as a heuristic in the UI and report.
+- Threshold rule and its history (section 7).
+- Backend and ML first, frontend last (the dashboard was built early; `backend/` currently has `main.py` and `service.py` only).
 
 **Open**
-- Dataset provenance: `data/raw/URL dataset.csv` (URL + label only, 450,176 rows) is in use, see `docs/dataset/README.md`. Source recorded (DOI 10.17632/vfszbj9b36.1, Kaitholikkal and B, 2024). License: CC BY 4.0, so attribute the authors in the report. The report text still names UCI/PhiUSIIL.
-- Admin auth mechanism: session cookie or bearer token. The report only says "valid session or token".
-- Whether the single `users` table is needed if the app has just one admin.
-- Final assignment of each feature to its ablation group, since a few (ratios, longest-token features) don't map obviously to one group.
-- Report inconsistencies to fix before submission: it refers to "MCA" in places but is submitted for a PG Diploma in Big Data Analytics, and Section 1.5 points to "Chapter 7" for future work, which is actually Chapter 8.
+- **Generalization (blocking for a trustworthy demo).** On the held-out split the selected Random Forest scores F1 0.831, recall 0.827, precision 0.835. On 40 hand-made, real, well-known legitimate URLs (`tests/data/sanity_urls.json`, measured by `python -m ml.sanity_check`) it flags 10 as phishing (25%); it catches 19 of 20 synthetic phishing URLs. The legitimate class in the single-source dataset is narrow, so other shortcuts probably remain. Options: add a second legitimate source (for example the Tranco list) and a second phishing feed, rebuild the split and retrain; or keep the dataset and document the limitation.
+- Report inconsistencies to fix before submission: it refers to "MCA" in places but is submitted for a PG Diploma in Big Data Analytics, and Section 1.5 points to "Chapter 7" for future work, which is actually Chapter 8. The dataset citation (DOI 10.17632/vfszbj9b36.1, CC BY 4.0) must replace the UCI/PhiUSIIL text.
+- Same-seed reproducibility of `ml.train` has not been re-verified (a full run takes about 1 hour).
+- `ml/predict.py` from the plan was not created; `backend/service.py` contains the prediction and explanation logic. Decide whether to keep it there or extract it.
 
 ## 13. Directory map
 
 ```
 phising-detection/
-├── frontend/            Next.js dashboard
-├── backend/             FastAPI app, routes, schemas
+├── frontend/            Next.js dashboard (detector page built; History, Model Info, Metrics pages not yet)
+├── backend/
+│   ├── main.py          FastAPI app: /health, /predict, /models, /metrics, CORS
+│   └── service.py       model loading, prediction, heuristic explanation
 ├── ml/
-│   ├── features.py      extract_features(url): single source of truth
-│   ├── preprocessing.py
-│   ├── train.py
-│   ├── evaluate.py
-│   ├── predict.py
-│   └── models/          phishing_model.joblib, metadata.json
+│   ├── data_prep.py     Phase 1: cleaning + stratified split
+│   ├── features.py      extract_features(url) and normalize_url: single source of truth
+│   ├── preprocessing.py pipelines and search spaces
+│   ├── train.py         tuning, selection, threshold, freeze (--resume, --rethreshold)
+│   ├── evaluate.py      test metrics, figures, ablation
+│   ├── sanity_check.py  hand-made real-world smoke check
+│   └── models/          phishing_model.joblib (git-ignored), candidate_*.joblib, metadata.json
 ├── data/
-│   ├── raw/
-│   └── processed/
-├── tests/               test_features.py, test_api.py, test_model.py
+│   ├── raw/             URL dataset.csv (git-ignored)
+│   └── processed/       train/test parquet, feature caches, cleaning report (git-ignored)
+├── tests/               test_data_prep, test_features, test_train, test_model, test_api; data/sanity_urls.json
 ├── reports/
-│   ├── figures/
-│   └── metrics/
+│   ├── figures/         confusion matrices, ROC, PR, threshold sweep, ablation
+│   └── metrics/         cv_results, test_metrics, test_comparison, ablation, threshold_sweep, chosen_threshold, sanity_check
 └── docs/
     ├── architecture.md
+    ├── PROGRESS.md      task checklist
     ├── reference/       original report + synopsis PDFs
-    ├── design/          feature schema, API, database details
-    ├── adr/             architecture decision records
-    ├── testing/         test plans and results
+    ├── design/          feature-schema.md (api.md, database.md still to write)
+    ├── adr/             architecture decision records (empty)
+    ├── testing/         test plans and results (empty)
     └── dataset/         dataset documentation (Table 3.1 items)
 ```
-
-Only `docs/` has content so far. The `.py` files above are planned, not yet created.
