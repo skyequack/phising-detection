@@ -1,6 +1,7 @@
 import pytest
 
 from ml.features import (
+    normalize_url,
     FEATURE_GROUPS,
     FEATURE_NAMES,
     InvalidURLError,
@@ -27,11 +28,11 @@ def test_output_order_and_determinism():
 
 def test_basic_values():
     f = extract_features(BASIC)
-    assert f["url_length"] == len(BASIC)
-    assert f["hostname_length"] == len("www.example.com")
+    assert f["url_length"] == len("http://example.com/a/b?x=1&y=2#top")  # normalized
+    assert f["hostname_length"] == len("example.com")
     assert f["path_length"] == len("/a/b")
     assert f["query_length"] == len("x=1&y=2")
-    assert f["num_subdomains"] == 1
+    assert f["num_subdomains"] == 0
     assert f["has_query"] == 1 and f["num_query_params"] == 2
     assert f["has_fragment"] == 1
     assert f["num_slashes"] == 4
@@ -148,3 +149,27 @@ def test_no_network(monkeypatch):
 def test_extract_matrix_shape_and_order():
     df = extract_matrix([BASIC, "http://1.2.3.4/"])
     assert df.shape == (2, 30) and list(df.columns) == list(FEATURE_NAMES)
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        ("https://www.example.com/x", "http://example.com/x"),
+        ("HTTPS://WWW.example.com/x", "http://example.com/x"),
+        ("https://example.com/", "http://example.com"),
+        ("example.com/x", "http://example.com/x"),
+        ("http://www.example.com", "https://example.com/"),
+    ],
+)
+def test_scheme_www_and_bare_slash_do_not_change_features(a, b):
+    assert extract_features(a) == extract_features(b)
+
+
+def test_normalize_keeps_meaningful_parts():
+    assert normalize_url("https://www.example.com/a/") == "http://example.com/a/"
+    assert normalize_url("https://wwwx.example.com") == "http://wwwx.example.com"
+    assert normalize_url("https://example.com/?q=1") == "http://example.com/?q=1"
+    assert normalize_url("ftp://example.com/") == "ftp://example.com/"
+    # www.<brand> in the middle of a host is a real signal and is kept
+    assert normalize_url("http://www.paypal.com.evil.example/") == "http://paypal.com.evil.example"
+    assert extract_features("http://a.www.example.com")["num_subdomains"] == 2

@@ -43,6 +43,7 @@ METRICS = ROOT / "reports" / "metrics"
 FIGURES = ROOT / "reports" / "figures"
 
 N_ITER = 8
+RF_N_ITER = 4  # Random Forest on ~350k rows costs ~6 min per candidate; halved to keep a full run near an hour
 SVM_CAP = 50_000
 CV_FOLDS = 5
 # Fixed BEFORE any test-set result exists: the threshold maximizes F1 subject to
@@ -161,7 +162,7 @@ def run(n_iter: int = N_ITER, svm_cap: int = SVM_CAP, quick: bool = False, resum
         base = build_pipeline(algo, scale_pos_weight=spw, n_jobs=-1 if heavy else 1, probability=False)
         t0 = time.time()
         search = RandomizedSearchCV(
-            base, SEARCH_SPACES[algo], n_iter=n_iter if not quick else 2, cv=cv,
+            base, SEARCH_SPACES[algo], n_iter=(min(n_iter, RF_N_ITER) if algo == "rf" else n_iter) if not quick else 2, cv=cv,
             scoring={"ap": "average_precision", "f1": "f1", "roc_auc": "roc_auc"}, refit="ap",
             random_state=SEED, n_jobs=1 if heavy else -1, error_score="raise",
         ).fit(Xa, ya)

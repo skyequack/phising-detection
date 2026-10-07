@@ -19,7 +19,7 @@ from urllib.parse import urlsplit
 import pandas as pd
 
 MAX_URL_LENGTH = 4096
-SCHEMA_VERSION = "1"
+SCHEMA_VERSION = "2"
 
 # Ordered as in Table 3.2; the model's column order is this order.
 FEATURE_GROUPS: dict[str, tuple[str, ...]] = {
@@ -58,6 +58,27 @@ _PORT = re.compile(r"(?::|\]:)(\d+)$")
 _ENCODED = re.compile(r"%[0-9a-fA-F]{2}")
 _HEX_TOKEN = re.compile(r"(?<![A-Za-z0-9])(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8,}(?![A-Za-z0-9])", re.I)
 _HEX_IP = re.compile(r"^0x[0-9a-f]+$", re.I)
+
+
+_ANY_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
+_HTTP = re.compile(r"^https?://", re.I)
+_WWW = re.compile(r"^www\.", re.I)
+_BARE_SLASH = re.compile(r"^(http://[^/?#]*)/$")
+
+
+def normalize_url(url: str) -> str:
+    """Remove dataset-shortcut signals before feature extraction.
+
+    In the training data 100% of legitimate URLs are https and 99.8% start with
+    ``www.`` (phishing: 6.4% and 8.1%), so the scheme, a leading ``www.`` and a
+    lone trailing ``/`` would let a model separate the classes without learning
+    anything about phishing. Every URL is given the scheme ``http://``, loses a
+    leading ``www.`` and a bare trailing slash. Other schemes are left untouched.
+    """
+    if _ANY_SCHEME.match(url) and not _HTTP.match(url):
+        return url
+    rest = _WWW.sub("", _HTTP.sub("", url))
+    return _BARE_SLASH.sub(lambda m: m.group(1), "http://" + rest)
 
 
 def _split(url: str) -> tuple[str, str, str, str, str]:
@@ -101,7 +122,10 @@ def _num_subdomains(host: str) -> int:
 
 
 def extract_features(url: str) -> dict[str, float]:
-    """Compute the 30 Table 3.2 features for one URL, in ``FEATURE_NAMES`` order."""
+    """Compute the 30 Table 3.2 features for one URL, in ``FEATURE_NAMES`` order.
+
+    Features are computed on ``normalize_url(url)`` (see there).
+    """
     if not isinstance(url, str):
         raise InvalidURLError("url must be a string")
     url = url.strip()
@@ -109,6 +133,7 @@ def extract_features(url: str) -> dict[str, float]:
         raise InvalidURLError("url is empty")
     if len(url) > MAX_URL_LENGTH:
         raise InvalidURLError(f"url longer than {MAX_URL_LENGTH} characters")
+    url = normalize_url(url)
 
     netloc, host, path, query, fragment = _split(url)
     n = len(url)
