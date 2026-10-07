@@ -86,15 +86,42 @@ def sweep_thresholds(y: np.ndarray, proba: np.ndarray, grid: np.ndarray | None =
     return pd.DataFrame(rows)
 
 
-def choose_threshold(sweep: pd.DataFrame, target_fnr: float = TARGET_FNR) -> dict:
-    """Max-F1 threshold with FNR <= target; if none qualifies, the lowest-FNR one."""
-    ok = sweep[sweep["fnr"] <= target_fnr]
-    if len(ok):
-        row, rule = ok.loc[ok["f1"].idxmax()], "max_f1_subject_to_fnr"
+def choose_threshold(sweep: pd.DataFrame, target_fnr: float | None = TARGET_FNR) -> dict:
+    """Threshold from out-of-fold predictions.
+
+    ``target_fnr=None``: plain max F1. Otherwise max F1 subject to FNR <= target;
+    if none qualifies, the lowest-FNR threshold.
+    """
+    if target_fnr is None:
+        row, rule = sweep.loc[sweep["f1"].idxmax()], "max_f1"
     else:
-        row, rule = sweep.loc[sweep["fnr"].idxmin()], "fallback_min_fnr"
+        ok = sweep[sweep["fnr"] <= target_fnr]
+        if len(ok):
+            row, rule = ok.loc[ok["f1"].idxmax()], "max_f1_subject_to_fnr"
+        else:
+            row, rule = sweep.loc[sweep["fnr"].idxmin()], "fallback_min_fnr"
     return {"threshold": float(row["threshold"]), "rule": rule, "target_fnr": target_fnr,
             **{k: float(row[k]) for k in ("precision", "recall", "f1", "fnr")}}
+
+
+def rethreshold(target_fnr: float | None, models: Path = MODELS, metrics: Path = METRICS) -> dict:
+    """Re-derive the threshold from the saved OOF sweep without retraining.
+
+    The model file is untouched, so its frozen SHA-256 stays valid. The change
+    is recorded in metadata.json under ``threshold_history``.
+    """
+    sweep = pd.read_csv(metrics / "threshold_sweep.csv")
+    thr = choose_threshold(sweep, target_fnr)
+    meta_path = models / "metadata.json"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta.setdefault("threshold_history", []).append(
+        {"previous": meta["threshold"], "changed_after_test_results_seen": meta.get("test_metrics") is not None
+         or (metrics / "test_metrics.json").exists(), "new_rule": thr["rule"]})
+    meta["threshold"] = thr
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (metrics / "chosen_threshold.json").write_text(
+        json.dumps({"algo": meta["algorithm"], **thr}, indent=2), encoding="utf-8")
+    return thr
 
 
 def select_model(rows: list[dict], tol: float = SELECTION_TOL) -> str:
@@ -227,8 +254,12 @@ def main() -> None:
     p.add_argument("--n-iter", type=int, default=N_ITER)
     p.add_argument("--svm-cap", type=int, default=SVM_CAP)
     p.add_argument("--resume", action="store_true", help="skip tuning; reuse saved cv_results.csv and candidates")
+    p.add_argument("--rethreshold", choices=["max_f1", "fnr"], help="re-pick the threshold from the saved OOF sweep and exit")
     p.add_argument("--quick", action="store_true", help="smoke test on 20k rows, 2 iterations")
     a = p.parse_args()
+    if a.rethreshold:
+        print(rethreshold(None if a.rethreshold == "max_f1" else TARGET_FNR))
+        return
     if a.quick:  # keep smoke-test output away from the real artifacts
         tmp = ROOT / "data" / "processed" / "quick"
         run(a.n_iter, a.svm_cap, True, models=tmp / "models", metrics=tmp / "metrics", figures=tmp / "figures")

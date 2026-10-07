@@ -1,6 +1,6 @@
 """Phase 3b: evaluate on the held-out test split, then run the feature-group ablation.
 
-Usage: python -m ml.evaluate
+Usage: python -m ml.evaluate [--no-ablation]   (skip the slow ablation, keep the saved ablation.csv)
 
 The test split is read only here, after ml.train froze the model: the stored
 SHA-256 of phishing_model.joblib must match, or this script refuses to run.
@@ -100,7 +100,8 @@ def _plot_curves(results: dict, y, figures: Path) -> None:
         plt.close(fig)
 
 
-def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METRICS, figures: Path = FIGURES) -> dict:
+def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METRICS, figures: Path = FIGURES,
+        ablate: bool = True) -> dict:
     meta = json.loads((models / "metadata.json").read_text(encoding="utf-8"))
     assert meta["frozen"] and _sha256(models / "phishing_model.joblib") == meta["model_sha256"], \
         "model changed after freezing; re-run ml.train before evaluating"
@@ -137,21 +138,25 @@ def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METR
     plt.close(fig)
     _plot_curves(probas, yt, figures)
 
-    abl = ablation(meta, X, y, Xt, yt)
-    abl.to_csv(metrics / "ablation.csv", index=False)
-    fig, ax = plt.subplots(figsize=(7, 4))
-    sub = abl[abl["kind"] != "baseline"]
-    ax.barh(sub["setting"], sub["d_pr_auc"])
-    ax.set(xlabel="Change in PR-AUC vs all features", title=f"Feature-group ablation ({NAMES[chosen]})")
-    fig.savefig(figures / "ablation.png", dpi=150, bbox_inches="tight")
-    plt.close(fig)
+    if ablate:
+        abl = ablation(meta, X, y, Xt, yt)
+        abl.to_csv(metrics / "ablation.csv", index=False)
+        fig, ax = plt.subplots(figsize=(7, 4))
+        sub = abl[abl["kind"] != "baseline"]
+        ax.barh(sub["setting"], sub["d_pr_auc"])
+        ax.set(xlabel="Change in PR-AUC vs all features", title=f"Feature-group ablation ({NAMES[chosen]})")
+        fig.savefig(figures / "ablation.png", dpi=150, bbox_inches="tight")
+        plt.close(fig)
 
     meta["test_metrics"] = tuned
     (models / "metadata.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(pd.DataFrame(flat).round(4).to_string(index=False))
-    print(abl.round(4).to_string(index=False))
+    if ablate:
+        print(abl.round(4).to_string(index=False))
     return out
 
 
 if __name__ == "__main__":
-    run()
+    import sys
+
+    run(ablate="--no-ablation" not in sys.argv)

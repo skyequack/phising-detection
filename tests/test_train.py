@@ -70,3 +70,11 @@ def test_compute_metrics_known_values():
     assert m["confusion_matrix"] == {"tn": 3, "fp": 1, "fn": 1, "tp": 3}
     assert m["accuracy"] == 0.75 and m["recall"] == 0.75 and m["fnr"] == 0.25
     assert m["specificity"] == 0.75 and m["precision"] == 0.75
+
+
+def test_unconstrained_threshold_is_plain_max_f1():
+    y = np.array([0] * 50 + [1] * 50)
+    p = np.concatenate([np.linspace(0.0, 0.6, 50), np.linspace(0.4, 1.0, 50)])
+    sweep = sweep_thresholds(y, p)
+    c = choose_threshold(sweep, target_fnr=None)
+    assert c["rule"] == "max_f1" and c["f1"] == sweep["f1"].max()
