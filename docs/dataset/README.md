@@ -1,0 +1,78 @@
+# Dataset: URL dataset.csv
+
+Location: `data/raw/URL dataset.csv` (raw, never edited in place; cleaned output goes to `data/processed/`).
+
+Fills in the Table 3.1 items from the report. Figures below were measured on 2026-10-07 from the raw file.
+
+## Schema
+
+| Column | Type | Description |
+|---|---|---|
+| `url` | string | Full URL, including scheme. |
+| `type` | string (categorical) | Class label: `legitimate` or `phishing`. |
+
+- Format: UTF-8 CSV with a header row, 2 columns, no index column.
+- 450,176 rows, 32,312,600 bytes.
+- The dataset contains **no pre-computed features**, only the URL string and the label. All ~30 features must come from `ml/features.py`, which also removes the training/inference mismatch risk the report describes in Section 2.4.
+- SHA-256: `accb2dfbfd3329a8b5cb1b85dcad90314a660c272be755cb45d0f6865014b466`
+
+## Profile (raw)
+
+| Item | Value |
+|---|---|
+| Rows | 450,176 |
+| `legitimate` | 345,738 (76.8%) |
+| `phishing` | 104,438 (23.2%) |
+| Empty / missing URLs | 0 |
+| Malformed rows (column count ≠ 2) | 0 |
+| Exact duplicate URLs | 0 |
+| URLs with conflicting labels | 0 |
+| URL length (chars) | min 8, max 2,314 (none above the 4,096 input limit) |
+| Schemes | `https` 352,185, `http` 97,948, `httpss` 35, `ftp` 8 |
+
+## Validation findings (2026-10-07)
+
+File integrity is clean: valid UTF-8, no BOM or NUL bytes, LF line endings, every row has exactly 2 columns, header present, no empty URL or label.
+
+| Check | Count | Action |
+|---|---|---|
+| Canonical duplicates (ignoring scheme, `www.`, trailing `/`, case) | 12,447 | Dedupe after canonicalizing, before the split. |
+| Canonical label conflicts | 3 | Drop these pairs (see below). |
+| Case-insensitive duplicates (exact-match dedupe misses them) | 81, no label conflicts | Covered by canonical dedupe. |
+| URLs containing whitespace | 521, all phishing | Keep or drop deliberately. A whitespace-containing URL is itself a phishing signal, but it can leak the label. |
+| Control characters | 2 (`\x13`) | Strip or drop. |
+| Non-ASCII characters | 310 | Keep. Relevant to punycode/homograph features. |
+| `urlsplit` raises `ValueError` | 1: `http://ladiesfirst-privileges[.]com/...` (invalid IPv6 bracket) | The extractor must catch parse errors and fall back, not crash. |
+| No hostname | 3: `http://#NAME?`, `http://?`, `http://?guid=Windows Updates Manager` (all phishing) | Drop. These are spreadsheet/scraper artefacts. |
+| Injected markup | 1 (`...php""></script><script>`) | Keep as test input for the XSS-safety tests. |
+| IP-address hosts | 3,954 | Valid signal for `has_ip_host`. |
+| Explicit port / `@` in URL | 1,606 / 2,955 | Valid signals for `has_port`, `has_at_symbol`. |
+| `httpss://` (35, all legitimate) and `ftp://` (8) | 43 | Drop or repair. All 35 `httpss` rows are labelled legitimate, so a model could learn "malformed scheme means legitimate". |
+
+The 3 canonical label conflicts:
+- `https://www.4shared.com` (legitimate) vs `http://4shared.com` (phishing)
+- `https://www.tommyhumphreys.com/` (legitimate) vs `http://tommyhumphreys.com/` (phishing)
+- `https://www.google.com/webhp` (legitimate) vs `http://www.google.com/webhp` (phishing)
+
+## Notes for preprocessing
+
+- **Class imbalance (~3.3:1).** Use stratified splits and stratified CV. Report PR-AUC, recall, and FNR, not accuracy alone (the report's Section 3.7 already requires this).
+- **Label normalization.** Labels are lowercase strings. Map to `legitimate`=0 and `phishing`=1 (positive class = phishing).
+- **Canonicalization may expose duplicates.** There are no exact duplicates, but canonicalizing (case, trailing slash, scheme, `www.`) can create near-duplicates and conflicting labels. Re-check after canonicalizing, before the split (report Section 3.4).
+- **Malformed schemes.** 35 `httpss://` URLs. Decide whether to drop or repair them. `urllib.parse` will parse them, but they are likely noise.
+- **Collection-bias check.** Measured: 85.0% of legitimate and 91.6% of phishing URLs have a path, and 13.3% / 18.7% have a query, so structure alone doesn't trivially separate the classes. The two classes may still differ systematically (for example, the top of the file looks like popular-site bare hosts), so check the path and query feature groups in the ablation study and mention it as a limitation.
+- **Order.** The file looks sorted by label (legitimate first). Shuffle with a fixed seed before any non-stratified operation.
+
+## Table 3.1 status
+
+| Item | Status |
+|---|---|
+| Source | "Phishing URL dataset", Version 1, published 2 April 2024. Contributors: Jishnu K S Kaitholikkal and Arthi B. DOI: [10.17632/vfszbj9b36.1](https://doi.org/10.17632/vfszbj9b36.1) (Mendeley Data DOI prefix). Source details were supplied by the user. |
+| License | CC BY 4.0 (supplied by the user). Attribution to the contributors above is required when the dataset is used or redistributed. |
+| Sample count | 450,176 raw. Record the post-cleaning count after preprocessing. |
+| Class distribution | 345,738 legitimate / 104,438 phishing (raw). |
+| Label definition | As defined by the original publishers. The labelling method is not in the supplied metadata, so check the DOI page's description. |
+| Duplicate policy | Exact duplicates removed, conflicting labels flagged (none in the raw file). |
+| Train/test split | 80/20, stratified by label, fixed random seed. |
+
+The report names the UCI Phishing Websites and PhiUSIIL datasets, but this file is neither (it has no feature columns). The report text in Section 3.4 and the references should be updated to cite the dataset actually used (10.17632/vfszbj9b36.1).

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "phishing-detector"
+version = "0.1.0"
+description = "URL-only phishing detection using lexical features and machine learning"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "numpy",
+    "pandas",
+    "pyarrow",
+    "scikit-learn",
+    "xgboost",
+    "joblib",
+    "matplotlib",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "sqlalchemy",
+    "pytest",
+    "httpx",
+]
+
+[tool.setuptools]
+packages = ["ml", "backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
