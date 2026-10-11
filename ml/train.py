@@ -213,12 +213,18 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def log(msg: str) -> None:
+    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+
+
 def run(n_iter: int = N_ITER, svm_cap: int = SVM_CAP, quick: bool = False, resume: bool = False,
         processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METRICS,
-        figures: Path = FIGURES) -> dict:
+        figures: Path = FIGURES, verbose: bool = False) -> dict:
     for d in (models, metrics, figures):
         d.mkdir(parents=True, exist_ok=True)
+    log(f"loading/extracting features from {processed} (cached after the first run)")
     X, y = load_features("train", processed)
+    log(f"train rows {len(X)}, phishing {y.mean():.3f}; output -> {models}, {metrics}")
     if quick:  # smoke test only; never used for reported results
         X, _, y, _ = train_test_split(X, y, train_size=20_000, stratify=y, random_state=SEED)
         X, y = X.reset_index(drop=True), y.reset_index(drop=True)
@@ -244,14 +250,16 @@ def run(n_iter: int = N_ITER, svm_cap: int = SVM_CAP, quick: bool = False, resum
         else:
             Xa, ya = X, y
         subsets[algo] = len(Xa)
+        log(f"[{ALGORITHMS.index(algo) + 1}/{len(ALGORITHMS)}] tuning {NAMES[algo]} on {len(Xa)} rows")
         heavy = algo in ("rf", "xgb")  # these parallelize internally
         base = build_pipeline(algo, scale_pos_weight=spw, n_jobs=-1 if heavy else 1, probability=False)
         t0 = time.time()
         search = RandomizedSearchCV(
             base, SEARCH_SPACES[algo], n_iter=(min(n_iter, RF_N_ITER) if algo == "rf" else n_iter) if not quick else 2, cv=cv,
             scoring={"ap": "average_precision", "f1": "f1", "roc_auc": "roc_auc"}, refit="ap",
-            random_state=SEED, n_jobs=1 if heavy else -1, error_score="raise",
+            random_state=SEED, n_jobs=1 if heavy else -1, error_score="raise", verbose=2 if verbose else 0,
         ).fit(Xa, ya)
+        log(f"{NAMES[algo]}: search done, best params {search.best_params_}; refitting final model")
         best = search.best_index_
         res = pd.DataFrame(search.cv_results_)
         cv_tables.append(res[["params", "mean_test_ap", "std_test_ap", "mean_test_f1", "mean_test_roc_auc",
@@ -272,11 +280,13 @@ def run(n_iter: int = N_ITER, svm_cap: int = SVM_CAP, quick: bool = False, resum
     if not resume:
         pd.concat(cv_tables).to_csv(metrics / "cv_results.csv", index=False)
     chosen = select_model(rows)
+    log(f"selected {NAMES[chosen]}; computing out-of-fold predictions for the threshold")
 
     Xa, ya = (X, y) if subsets[chosen] == len(X) else train_test_split(
         X, y, train_size=svm_cap, stratify=y, random_state=SEED)[::2]
     oof = cross_val_predict(clone(fitted[chosen]), Xa, ya, cv=cv, method="predict_proba",
                             n_jobs=1 if chosen in ("rf", "xgb") else -1)[:, 1]
+    log("out-of-fold predictions done; sweeping threshold, freezing model, computing importances")
     np.save(processed / f"oof_{chosen}.npy", oof)  # reused by calibrate_artifacts
     sweep = sweep_thresholds(ya.to_numpy(), oof)
     thr = choose_threshold(sweep)
@@ -316,19 +326,23 @@ def main() -> None:
     p.add_argument("--resume", action="store_true", help="skip tuning; reuse saved cv_results.csv and candidates")
     p.add_argument("--rethreshold", choices=["max_f1", "fnr"], help="re-pick the threshold from the saved OOF sweep and exit")
     p.add_argument("--calibrate", action="store_true", help="calibrate the selected model on OOF train predictions and exit")
+    p.add_argument("--verbose", action="store_true", help="print every CV fit and timestamped stage messages")
+    for name, default in (("processed", PROCESSED), ("models", MODELS), ("metrics", METRICS), ("figures", FIGURES)):
+        p.add_argument(f"--{name}", type=Path, default=default, help=f"{name} directory (default {default})")
     p.add_argument("--quick", action="store_true", help="smoke test on 20k rows, 2 iterations")
     a = p.parse_args()
     if a.calibrate:
-        calibrate_artifacts(svm_cap=a.svm_cap)
+        calibrate_artifacts(a.processed, a.models, a.metrics, a.figures, a.svm_cap)
         return
     if a.rethreshold:
-        print(rethreshold(None if a.rethreshold == "max_f1" else TARGET_FNR))
+        print(rethreshold(None if a.rethreshold == "max_f1" else TARGET_FNR, a.models, a.metrics))
         return
     if a.quick:  # keep smoke-test output away from the real artifacts
         tmp = ROOT / "data" / "processed" / "quick"
         run(a.n_iter, a.svm_cap, True, models=tmp / "models", metrics=tmp / "metrics", figures=tmp / "figures")
     else:
-        run(a.n_iter, a.svm_cap, resume=a.resume)
+        run(a.n_iter, a.svm_cap, resume=a.resume, processed=a.processed, models=a.models,
+            metrics=a.metrics, figures=a.figures, verbose=a.verbose)
 
 
 if __name__ == "__main__":

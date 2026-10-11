@@ -4,7 +4,7 @@ Usage: python -m ml.evaluate [--no-ablation]   (skip the slow ablation, keep the
 
 The test split is read only here, after ml.train froze the model: the stored
 SHA-256 of phishing_model.joblib must match, or this script refuses to run.
-Outputs: reports/metrics/test_metrics.json, test_comparison.csv, ablation.csv, calibration.json, calibration_test.csv;
+Outputs: reports/metrics/test_metrics.json, curves.json, test_comparison.csv, ablation.csv, calibration.json, calibration_test.csv;
 reports/figures/confusion_matrices.png, calibration.png, roc_curves.png, pr_curves.png, ablation.png.
 The selected model's test metrics are also written back into metadata.json.
 """
@@ -88,6 +88,22 @@ def ablation(meta: dict, X, y, Xt, yt) -> pd.DataFrame:
     return df
 
 
+def curve_data(results: dict, y, points: int = 150) -> dict:
+    """ROC and precision-recall points per model (thinned evenly) for the dashboard; AUCs are exact."""
+    def thin(xs, ys):
+        idx = np.unique(np.linspace(0, len(xs) - 1, min(points, len(xs))).astype(int))
+        return [[round(float(xs[i]), 5), round(float(ys[i]), 5)] for i in idx]
+
+    out = {}
+    for algo, p in results.items():
+        fpr, tpr, _ = roc_curve(y, p)
+        prec, rec, _ = precision_recall_curve(y, p)
+        out[algo] = {"name": NAMES[algo], "roc_auc": float(roc_auc_score(y, p)),
+                     "pr_auc": float(average_precision_score(y, p)),
+                     "roc": thin(fpr, tpr), "pr": thin(rec, prec)}
+    return out
+
+
 def _plot_curves(results: dict, y, figures: Path) -> None:
     for kind, fn, xl, yl in (("roc", roc_curve, "False positive rate", "True positive rate"),
                              ("pr", precision_recall_curve, "Recall", "Precision")):
@@ -157,6 +173,7 @@ def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METR
     fig.savefig(figures / "confusion_matrices.png", dpi=150, bbox_inches="tight")
     plt.close(fig)
     _plot_curves(probas, yt, figures)
+    (metrics / "curves.json").write_text(json.dumps(curve_data(probas, yt)), encoding="utf-8")
 
     if ablate:
         abl = ablation(meta, X, y, Xt, yt)
@@ -178,6 +195,11 @@ def run(processed: Path = PROCESSED, models: Path = MODELS, metrics: Path = METR
 
 
 if __name__ == "__main__":
-    import sys
+    import argparse
 
-    run(ablate="--no-ablation" not in sys.argv)
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--no-ablation", action="store_true")
+    for name, default in (("processed", PROCESSED), ("models", MODELS), ("metrics", METRICS), ("figures", FIGURES)):
+        ap.add_argument(f"--{name}", type=Path, default=default)
+    a = ap.parse_args()
+    run(a.processed, a.models, a.metrics, a.figures, ablate=not a.no_ablation)

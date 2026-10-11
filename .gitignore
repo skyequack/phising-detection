@@ -12,3 +12,10 @@ data/processed/*
 ml/models/*.joblib
 node_modules/
 .next/
+data/external/*
+!data/external/.gitkeep
+data/processed_v2/*
+!data/processed_v2/.gitkeep
+ml/models_v1/*.joblib
+logs/
+ml/runs/

@@ -20,6 +20,8 @@ from urllib.parse import urlsplit
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
+from ml.features import MAX_URL_LENGTH
+
 ROOT = Path(__file__).resolve().parents[1]
 RAW_CSV = ROOT / "data" / "raw" / "URL dataset.csv"
 OUT_DIR = ROOT / "data" / "processed"
@@ -48,6 +50,8 @@ def drop_reason(url: str) -> str | None:
         return "empty_url"
     if _CONTROL.search(url):
         return "control_chars"
+    if len(url) > MAX_URL_LENGTH:
+        return "too_long"  # the extractor rejects these (InvalidURLError)
     if not _HTTP_SCHEME.match(url):
         return "bad_scheme"  # httpss://, ftp://, scheme-less
     try:
