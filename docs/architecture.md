@@ -121,7 +121,7 @@ flowchart LR
 
 ## 8. Data model
 
-SQLite through SQLAlchemy. All access goes through the ORM (parameterized queries). **Four entities, no `users` table**: admin access is a single static bearer token from the `ADMIN_TOKEN` environment variable, so `audit_logs.actor` is a label string. *(Planned; the database is not built yet.)*
+SQLite through SQLAlchemy. All access goes through the ORM (parameterized queries). **Four entities, no `users` table**: admin access is a single static bearer token from the `ADMIN_TOKEN` environment variable, so `audit_logs.actor` is a label string. *(Built in `backend/db.py`; `audit_logs` is created but not written to until the admin endpoints exist.)*
 
 ```mermaid
 erDiagram
@@ -141,9 +141,13 @@ Raw URLs are not stored, only an HMAC-SHA256 of the canonicalized URL keyed by `
 |---|---|---|---|
 | `POST /predict` | public (rate-limitable) | `{url}` returns `label`, `probability`, `model_version`, `features`, `explanation`. | built |
 | `GET /models` | public | Model info (algorithm, training date, metrics). | built |
-| `GET /predictions` | public | Prediction history. | planned |
-| `GET /metrics/{model_version}` | public | Confusion matrix, ROC/PR data, comparison table. | partly built (`GET /metrics`, no version path) |
-| Training / model activation | **authenticated admin only** | Never part of the public prediction flow. Audited. | planned |
+| `GET /predictions` | public | Prediction history (hashes only), `limit` 1 to 100, `offset`, newest first. | built |
+| `GET /metrics/{model_version}` | public | Confusion matrix, ROC/PR data, comparison table. | built (`GET /metrics` for the active model; `/metrics/{version}` returns the active model's files, or the stored test metrics for an older registered version, 404 otherwise) |
+| `POST /admin/train`, `GET /admin/train/status` | **admin only** | Starts one training run in a child process with fixed arguments (data from `TRAIN_DATA_DIR`, default `data/processed_v2`); output goes to `ml/runs/<timestamp>/`, the new model is registered as inactive. 409 while a run is active. | built |
+| `GET /admin/models`, `POST /admin/models/{version}/activate` | **admin only** | List registered models; load a registered model's artifacts and make it the served one (persists across restarts). | built |
+| `GET /admin/audit-logs` | **admin only** | Paged audit trail. | built |
+
+Admin auth is `Authorization: Bearer <ADMIN_TOKEN>`, compared with `secrets.compare_digest`. Admin is disabled (every call 401) unless the token is at least 16 characters and not the `.env.example` placeholder. Artifact folders come only from the `models` table, which server code writes, so a request cannot name a path. Limits: activation only works while a model's artifact folder still exists; a training run that produces an already-registered version (same algorithm and same day) is rejected; there is no rate limit on failed logins yet.
 
 `GET /health` (built) reports whether the model loaded.
 
@@ -153,6 +157,7 @@ Raw URLs are not stored, only an HMAC-SHA256 of the canonicalized URL keyed by `
 - Reject malformed or oversized input (max 4096 chars) before parsing. Pydantic validates the body.
 - ORM-only DB access, with no string-built SQL.
 - Admin endpoints require a valid session or token. Training runs and model activations are written to `audit_logs` with actor, timestamp, and outcome.
+- Validation errors return a fixed body (`{"detail": "Invalid request"}` or `Invalid URL`) and never echo the submitted value. Responses carry `X-Content-Type-Options: nosniff`.
 - Errors must not leak implementation details. Tests cover SQL-injection and XSS-like strings, oversized/malformed input, unauthorized admin access, and path traversal in any file handling.
 
 ## 11. Testing
@@ -171,10 +176,10 @@ Four levels: feature-extractor unit tests, integration across frontend/backend/m
 - Final feature-to-group assignment (section 6) and the SVM subsample / RF iteration caps (section 7).
 - Explanation: a heuristic, not SHAP. For each feature the backend averages (a) the probability drop when that feature alone is reset to the legitimate-class median and (b) the rise when only that feature is set to its real value on an all-median row. Top 8 shown plus per-group sums. Label it as a heuristic in the UI and report. The probability is calibrated on in-distribution data; the UI should call it a "model score", not a confidence that the site is phishing.
 - Threshold rule and its history (section 7).
-- Backend and ML first, frontend last (the dashboard was built early; `backend/` currently has `main.py` and `service.py` only).
+- Backend and ML first, frontend last (the dashboard was built early, then the backend, then the remaining pages).
 
 **Open**
-- **Generalization (blocking for a trustworthy demo).** On the held-out split the selected, calibrated Random Forest scores F1 0.831, recall 0.826, precision 0.836 at threshold 0.41. On 40 hand-made, real, well-known legitimate URLs (`tests/data/sanity_urls.json`, measured by `python -m ml.sanity_check`) it flags 10 as phishing (25%), four of them with scores of 0.78 or higher even after calibration (calibration holds on the held-out split but not on out-of-distribution URLs); it catches 19 of 20 synthetic phishing URLs. The legitimate class in the single-source dataset is narrow, so other shortcuts probably remain. Options: add a second legitimate source (for example the Tranco list) and a second phishing feed, rebuild the split and retrain; or keep the dataset and document the limitation.
+- **Generalization (reduced, not solved).** The model in use (v2, retrained with PhishTank and Tranco data, 2026-10-10) scores F1 0.808 on the original held-out split. On data from other sources it catches 77% of newly reported PhishTank phishing and 70% of an OpenPhish feed, and wrongly flags 14.8% of 921 real links crawled from popular sites (earlier model: 57%, 51%, 18.8%). The Tranco legitimate training URLs have template-generated paths, not real ones. A larger real-link crawl used as training data is the next step if the false-alarm rate must come down. All figures: `docs/PROGRESS.md`, Metrics page.
 - Report inconsistencies to fix before submission: it refers to "MCA" in places but is submitted for a PG Diploma in Big Data Analytics, and Section 1.5 points to "Chapter 7" for future work, which is actually Chapter 8. The dataset citation (DOI 10.17632/vfszbj9b36.1, CC BY 4.0) must replace the UCI/PhiUSIIL text.
 - Same-seed reproducibility of `ml.train` has not been re-verified (a full run takes about 1 hour).
 - `ml/predict.py` from the plan was not created; `backend/service.py` contains the prediction and explanation logic. Decide whether to keep it there or extract it.
@@ -183,32 +188,36 @@ Four levels: feature-extractor unit tests, integration across frontend/backend/m
 
 ```
 phising-detection/
-├── frontend/            Next.js dashboard (detector page built; History, Model Info, Metrics pages not yet)
+├── README.md            setup, run, reproduce
+├── frontend/            Next.js dashboard: app/ (Detector, history, model, metrics), components/, lib/
 ├── backend/
-│   ├── main.py          FastAPI app: /health, /predict, /models, /metrics, CORS
-│   └── service.py       model loading, prediction, heuristic explanation
+│   ├── main.py          FastAPI app: public routes, validation, CORS, security headers
+│   ├── admin.py         admin routes: token auth, training runs, model activation, audit log
+│   ├── db.py            SQLAlchemy models, URL hashing, model registry, audit helper
+│   └── service.py       model loading, prediction, heuristic explanation, metrics files
 ├── ml/
-│   ├── data_prep.py     Phase 1: cleaning + stratified split
+│   ├── data_prep.py     cleaning + stratified split of the original data
 │   ├── features.py      extract_features(url) and normalize_url: single source of truth
 │   ├── preprocessing.py pipelines and search spaces
-│   ├── train.py         tuning, selection, threshold, freeze (--resume, --rethreshold, --calibrate)
+│   ├── train.py         tuning, selection, threshold, freeze (--calibrate, --verbose, --processed/--models/...)
 │   ├── calibration.py   PrefitCalibrated wrapper, ECE, reliability tables
-│   ├── evaluate.py      test metrics, calibration report, figures, ablation
-│   ├── sanity_check.py  hand-made real-world smoke check
-│   └── models/          phishing_model.joblib (git-ignored), candidate_*.joblib, metadata.json
-├── data/
-│   ├── raw/             URL dataset.csv (git-ignored)
-│   └── processed/       train/test parquet, feature caches, cleaning report (git-ignored)
-├── tests/               test_data_prep, test_features, test_train, test_calibration, test_model, test_api; data/sanity_urls.json
+│   ├── evaluate.py      test metrics, calibration report, curves, figures, ablation
+│   ├── phishtank_prep.py, crawl_links.py, build_v2.py   second data sources and the v2 training set
+│   ├── sanity_check.py, external_validation.py, phishtank_baseline.py, crawl_baseline.py, heldout_compare.py   checks on data never trained on
+│   ├── benchmark.py     latency, throughput, memory (writes reports/metrics/performance.json)
+│   ├── models/          model in use: phishing_model.joblib (git-ignored), candidate_*.joblib, metadata.json
+│   ├── models_v1/       the earlier model (metadata only in git)
+│   └── runs/            output of POST /admin/train (git-ignored)
+├── data/                raw, processed, processed_v2, external (all git-ignored except .gitkeep files)
+├── tests/               280 tests, see docs/testing/README.md; data/sanity_urls.json
 ├── reports/
-│   ├── figures/         confusion matrices, ROC, PR, threshold sweep, ablation
-│   └── metrics/         cv_results, test_metrics, test_comparison, ablation, threshold_sweep, chosen_threshold, sanity_check
+│   ├── figures/, metrics/   results for the model in use
+│   └── figures_v1/, metrics_v1/   the earlier model's results
 └── docs/
-    ├── architecture.md
-    ├── PROGRESS.md      task checklist
+    ├── architecture.md, PROGRESS.md (checklist and disclosures)
     ├── reference/       original report + synopsis PDFs
-    ├── design/          feature-schema.md (api.md, database.md still to write)
-    ├── adr/             architecture decision records (empty)
-    ├── testing/         test plans and results (empty)
-    └── dataset/         dataset documentation (Table 3.1 items)
+    ├── design/          api.md, database.md, feature-schema.md
+    ├── adr/             decision records 001 to 005
+    ├── testing/         test results and known gaps
+    └── dataset/         dataset documentation and the v2 sources
 ```

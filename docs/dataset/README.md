@@ -93,7 +93,7 @@ The first models scored 97-99% F1, but they flagged ordinary sites such as `http
 
 A model can score highly on this dataset by learning "not `https://www.` means phishing". Those scores do not carry over to real URLs. Fix: `ml/features.py` normalizes every URL before extracting features (scheme forced to `http://`, leading `www.` and a lone trailing `/` removed), see `docs/design/feature-schema.md`. After the fix the held-out F1 fell from about 0.97 to 0.83. The model cannot use the http/https distinction at all, which is a real loss in practice but a pure artefact here.
 
-Remaining concern: the legitimate class comes from one collection source and is narrow. On 40 hand-made real legitimate URLs (`tests/data/sanity_urls.json`) the final model still flags 10 (25%). Treat all reported metrics as describing this dataset only, and state that in the report. A second legitimate source (for example the Tranco list) and a second phishing feed would address it (not done, needs downloads).
+Remaining concern: the legitimate class comes from one collection source and is narrow. On 40 hand-made real legitimate URLs (`tests/data/sanity_urls.json`) the final model still flags 10 (25%). Treat all reported metrics as describing this dataset only, and state that in the report. This was addressed in v2 with Tranco and PhishTank, see "Additional sources (v2)" below; on 921 real crawled links the v2 model still flags 14.8%.
 
 ## Notes for preprocessing
 
@@ -117,3 +117,34 @@ Remaining concern: the legitimate class comes from one collection source and is 
 | Train/test split | 80/20, stratified by label, fixed random seed. |
 
 The report names the UCI Phishing Websites and PhiUSIIL datasets, but this file is neither (it has no feature columns). The report text in Section 3.4 and the references should be updated to cite the dataset actually used (10.17632/vfszbj9b36.1).
+
+## Additional sources (v2, added 2026-10-08)
+
+Accessed 2026-10-08, stored git-ignored under `data/external/` and never edited. Used only as described; none is redistributed in this repository.
+
+| Source | File | SHA-256 | Size / content | Used for |
+|---|---|---|---|---|
+| PhishTank `online-valid.csv.gz` | `data/external/phishtank/` | `bb3b486e1cb4052aa1e8635ae6fbf3f7d4a6c2fb1b2a277ac00f0ec00c62b50f` | 2.4 MB; 69,623 verified online phishing URLs, submitted 2011 to 2026-10-07 | Phishing training (older 85% by submission time, 57,134 rows after cleaning) and held-out test (newest 15%, 10,083 rows) |
+| Tranco top-1M list (`top-1m.csv.zip`) | `data/external/tranco/` | `822131033446fe75743fcd96d044df2751901465f090c422ef118e04c3f68a0c` | 9.6 MB; ranked domains, no paths | Legitimate training (59,156 domains with template paths), validation domains (2,000, bare), and the link-crawl domains |
+| OpenPhish community feed (`feed.txt`) | `data/external/openphish/` | `c00074e37dce95c9eb44ca64d033b82b5373154f9e4078f8f6eb39e9cb2e47a7` | 14 KB; 300 URLs | External phishing test only, never trained on |
+| Link crawl (`ml/crawl_links.py`) | `data/external/crawl/` | n/a | 921 same-site links from the front pages of 191 of 500 sampled Tranco domains (robots.txt honoured, one page per domain) | External legitimate test only |
+
+Derived files are in `data/processed/` (`phishtank_train.parquet`, `phishtank_heldout.parquet`, `phishtank_report.json`) and `data/processed_v2/` (`train.parquet`, `test.parquet`, `build_report.json`). Scripts: `ml/phishtank_prep.py`, `ml/crawl_links.py`, `ml/build_v2.py`. The PhishTank cleaning applies the same rules as the original data, plus HTML-unescaping and a 4,096-character limit; 2,403 of 69,623 rows were dropped (2,370 duplicates, 31 already in the original dataset, 1 in OpenPhish, 1 control characters, 2 too long, with `too_long` now part of `ml.data_prep`).
+
+Caveats:
+- The Tranco paths are template-generated (`ml/build_v2.py`), not real URLs. The crawl is the check on whether they generalise.
+- The Tranco file used is the default list downloaded on 2026-10-08; no Tranco list ID or permalink was recorded, so the exact list cannot be re-fetched. Use the SHA-256 above to identify it.
+- PhishTank was downloaded without an application key (the site asks automated downloads to register one and limits keyless downloads). One download was made.
+
+### Licences and terms (checked 2026-10-08 from the sites' public pages; not legal advice)
+
+| Source | What the public pages say | Consequence for this project |
+|---|---|---|
+| PhishTank | The data page and home page state no data licence. The home page describes "an open API for developers and researchers... at no charge". The footer "Terms of Use" links to a Cisco end-user licence agreement whose text was not available to read. No citation format is given. | Not verified. Read the linked Cisco agreement before publishing. Do not redistribute the data. Name PhishTank (Cisco Talos Intelligence Group) as the source with the access date. |
+| Tranco | No licence for the list itself. It combines upstream providers with their own terms: Cisco Umbrella (free), Majestic (CC BY 3.0), CrUX (CC BY-SA 4.0), Cloudflare Radar (CC BY-NC 4.0, non-commercial), Farsight (default list only). | Academic, non-commercial use is consistent with these terms. Cite the paper below. |
+| OpenPhish community feed | Terms of Use: for personal use; academic, independent or personal research allowed if it does not support an organisation's business operations; commercial use needs written consent; distributing or disclosing the information and creating derivative works are prohibited without written permission. The separate academic programme (60-day access, accredited institution email) requires citing OpenPhish with the access date and bars sharing. | Used for evaluation only, not redistributed, not trained on. Cite as `www.openphish.com`, accessed 2026-10-08. If the report ships any OpenPhish URLs, ask OpenPhish first. |
+
+Citations for the report:
+- Le Pochat, V., Van Goethem, T., Tajalizadehkhoob, S., Korczynski, M., and Joosen, W. (2019). Tranco: A Research-Oriented Top Sites Ranking Hardened Against Manipulation. NDSS 2019. https://doi.org/10.14722/ndss.2019.23386
+- PhishTank, operated by Cisco Talos Intelligence Group. `data.phishtank.com/data/online-valid.csv.gz`, accessed 2026-10-08.
+- OpenPhish community feed. `www.openphish.com`, accessed 2026-10-08.
