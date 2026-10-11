@@ -19,3 +19,9 @@ data/processed_v2/*
 ml/models_v1/*.joblib
 logs/
 ml/runs/
+.env.*
+!.env.example
+*.db-journal
+*.db-wal
+*.db-shm
+.claude/settings.local.json
