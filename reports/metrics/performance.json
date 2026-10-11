@@ -1,0 +1,64 @@
+{
+  "measured_at": "2026-10-11T09:31:16+0300",
+  "machine": {
+    "platform": "Windows-11-10.0.26300-SP0",
+    "python": "3.12.10",
+    "cpu_count": 16
+  },
+  "notes": "Loopback HTTP, one uvicorn worker, temporary SQLite database, URLs sampled from the original test split. Single-machine numbers; they say nothing about capacity under production load.",
+  "model_version": "rf-2026-10-08",
+  "model_file_mb": 1146.3,
+  "model_load_seconds": 1.91,
+  "rss_mb_before_load": 121.6,
+  "rss_mb_after_load": 1340.2,
+  "feature_extraction": {
+    "urls": 5000,
+    "urls_per_second": 19843,
+    "us_per_url": 50.4
+  },
+  "batch_scoring": {
+    "rows": 5000,
+    "rows_per_second": 12222
+  },
+  "predict_with_explanation_in_process": {
+    "n": 200,
+    "mean_ms": 26.22,
+    "p50_ms": 25.67,
+    "p95_ms": 29.69,
+    "p99_ms": 59.36,
+    "max_ms": 62.27
+  },
+  "api": {
+    "server_startup_seconds": 3.4,
+    "rss_mb_server_idle": 1357.2,
+    "rss_mb_server_after_requests": 1360.9,
+    "predict_sequential": {
+      "n": 300,
+      "mean_ms": 31.13,
+      "p50_ms": 30.22,
+      "p95_ms": 32.46,
+      "p99_ms": 84.8,
+      "max_ms": 88.94,
+      "errors": 0
+    },
+    "predictions_history_get": {
+      "n": 50,
+      "mean_ms": 2.1,
+      "p50_ms": 1.93,
+      "p95_ms": 2.38,
+      "p99_ms": 8.78,
+      "max_ms": 8.78
+    },
+    "predict_concurrent": {
+      "threads": 8,
+      "n": 200,
+      "mean_ms": 204.14,
+      "p50_ms": 228.55,
+      "p95_ms": 312.51,
+      "p99_ms": 337.79,
+      "max_ms": 338.87,
+      "requests_per_second": 13.0,
+      "errors": 0
+    }
+  }
+}

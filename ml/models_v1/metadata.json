@@ -1,0 +1,309 @@
+{
+  "algorithm": "rf",
+  "algorithm_name": "Random Forest",
+  "feature_schema_version": "2",
+  "features_source_hash": "72f4f2a8",
+  "feature_names": [
+    "url_length",
+    "hostname_length",
+    "path_length",
+    "query_length",
+    "num_digits",
+    "num_letters",
+    "num_special_chars",
+    "num_dots",
+    "num_hyphens",
+    "num_slashes",
+    "digit_ratio",
+    "special_char_ratio",
+    "num_subdomains",
+    "has_ip_host",
+    "has_port",
+    "has_userinfo",
+    "has_at_symbol",
+    "longest_host_token",
+    "has_punycode",
+    "has_query",
+    "num_query_params",
+    "num_encoded_chars",
+    "has_fragment",
+    "has_double_slash_path",
+    "path_to_url_ratio",
+    "longest_path_segment",
+    "hostname_entropy",
+    "url_entropy",
+    "suspicious_keyword_count",
+    "has_hex_token"
+  ],
+  "feature_groups": {
+    "length": [
+      "url_length",
+      "hostname_length",
+      "path_length",
+      "query_length"
+    ],
+    "char_count": [
+      "num_digits",
+      "num_letters",
+      "num_special_chars",
+      "num_dots",
+      "num_hyphens",
+      "num_slashes",
+      "digit_ratio",
+      "special_char_ratio"
+    ],
+    "host": [
+      "num_subdomains",
+      "has_ip_host",
+      "has_port",
+      "has_userinfo",
+      "has_at_symbol",
+      "longest_host_token",
+      "has_punycode"
+    ],
+    "query_path": [
+      "has_query",
+      "num_query_params",
+      "num_encoded_chars",
+      "has_fragment",
+      "has_double_slash_path",
+      "path_to_url_ratio",
+      "longest_path_segment"
+    ],
+    "entropy": [
+      "hostname_entropy",
+      "url_entropy"
+    ],
+    "keyword": [
+      "suspicious_keyword_count",
+      "has_hex_token"
+    ]
+  },
+  "threshold": {
+    "threshold": 0.41,
+    "rule": "max_f1",
+    "target_fnr": null,
+    "precision": 0.840350754121361,
+    "recall": 0.8128766082188806,
+    "f1": 0.8263853917314551,
+    "fnr": 0.18712339178111936
+  },
+  "trained_at": "2026-10-07T17:28:35+00:00",
+  "seed": 42,
+  "cv_folds": 5,
+  "n_iter": 8,
+  "quick": false,
+  "resumed_from_saved_search": false,
+  "hyperparameters": {
+    "clf__n_estimators": 300,
+    "clf__min_samples_leaf": 2,
+    "clf__max_features": 0.5,
+    "clf__max_depth": 30
+  },
+  "candidates": [
+    {
+      "algo": "lr",
+      "params": {
+        "clf__C": 56.69849511478853
+      },
+      "cv_ap": 0.6868459299150041,
+      "cv_f1": 0.5810625599366211,
+      "cv_roc_auc": 0.846791191319752,
+      "train_rows": 350141,
+      "seconds": 28.0
+    },
+    {
+      "algo": "dt",
+      "params": {
+        "clf__min_samples_leaf": 50,
+        "clf__max_depth": null
+      },
+      "cv_ap": 0.8514431409927713,
+      "cv_f1": 0.7323445457630802,
+      "cv_roc_auc": 0.9370770737769168,
+      "train_rows": 350141,
+      "seconds": 28.5
+    },
+    {
+      "algo": "rf",
+      "params": {
+        "clf__n_estimators": 300,
+        "clf__min_samples_leaf": 2,
+        "clf__max_features": 0.5,
+        "clf__max_depth": 30
+      },
+      "cv_ap": 0.9117335090772984,
+      "cv_f1": 0.8255384175950151,
+      "cv_roc_auc": 0.965632472561213,
+      "train_rows": 350141,
+      "seconds": 570.2
+    },
+    {
+      "algo": "svm",
+      "params": {
+        "clf__C": 15.702970884055382,
+        "clf__gamma": 0.06251373574521749
+      },
+      "cv_ap": 0.8117783842626975,
+      "cv_f1": 0.7506691404675866,
+      "cv_roc_auc": 0.9338351542489175,
+      "train_rows": 50000,
+      "seconds": 1397.4
+    },
+    {
+      "algo": "xgb",
+      "params": {
+        "clf__learning_rate": 0.11906379991333112,
+        "clf__max_depth": 9,
+        "clf__n_estimators": 221,
+        "clf__subsample": 0.662397808134481
+      },
+      "cv_ap": 0.9149234895572708,
+      "cv_f1": 0.8139392675224839,
+      "cv_roc_auc": 0.9663204594684999,
+      "train_rows": 350141,
+      "seconds": 109.9
+    }
+  ],
+  "train_rows": 350141,
+  "model_train_rows": 350141,
+  "feature_importance": {
+    "url_length": 0.027297170086278803,
+    "hostname_length": 0.03081232957354404,
+    "path_length": 0.04476160433250223,
+    "query_length": 0.01485728777979238,
+    "num_digits": 0.058273539383450604,
+    "num_letters": 0.027634480647918097,
+    "num_special_chars": 0.03225002166180651,
+    "num_dots": 0.0880657474461819,
+    "num_hyphens": 0.03450574484478961,
+    "num_slashes": 0.03798382876802209,
+    "digit_ratio": 0.050179253606220386,
+    "special_char_ratio": 0.05482520319611059,
+    "num_subdomains": 0.03328176994745162,
+    "has_ip_host": 0.002014372086569937,
+    "has_port": 0.002222602909956574,
+    "has_userinfo": 4.693662876472866e-06,
+    "has_at_symbol": 0.001609867980364122,
+    "longest_host_token": 0.05104836116294979,
+    "has_punycode": 0.00015784104411018405,
+    "has_query": 0.002804833119559562,
+    "num_query_params": 0.00419725078292978,
+    "num_encoded_chars": 0.002670228039353486,
+    "has_fragment": 8.285237699404792e-06,
+    "has_double_slash_path": 0.00010047977515354741,
+    "path_to_url_ratio": 0.05820648603404794,
+    "longest_path_segment": 0.10623081809262239,
+    "hostname_entropy": 0.06490279240547119,
+    "url_entropy": 0.07604342227339501,
+    "suspicious_keyword_count": 0.07915202174426174,
+    "has_hex_token": 0.01389766237461001
+  },
+  "group_importance": {
+    "length": 0.11772839177211745,
+    "char_count": 0.3837178195544998,
+    "host": 0.0903395087942787,
+    "query_path": 0.1742183810813661,
+    "entropy": 0.1409462146788662,
+    "keyword": 0.09304968411887175
+  },
+  "legit_medians": {
+    "url_length": 48.0,
+    "hostname_length": 15.0,
+    "path_length": 23.0,
+    "query_length": 0.0,
+    "num_digits": 0.0,
+    "num_letters": 37.0,
+    "num_special_chars": 9.0,
+    "num_dots": 2.0,
+    "num_hyphens": 0.0,
+    "num_slashes": 4.0,
+    "digit_ratio": 0.0,
+    "special_char_ratio": 0.1780821917808219,
+    "num_subdomains": 0.0,
+    "has_ip_host": 0.0,
+    "has_port": 0.0,
+    "has_userinfo": 0.0,
+    "has_at_symbol": 0.0,
+    "longest_host_token": 9.0,
+    "has_punycode": 0.0,
+    "has_query": 0.0,
+    "num_query_params": 0.0,
+    "num_encoded_chars": 0.0,
+    "has_fragment": 0.0,
+    "has_double_slash_path": 0.0,
+    "path_to_url_ratio": 0.5,
+    "longest_path_segment": 13.0,
+    "hostname_entropy": 3.3371753411230767,
+    "url_entropy": 4.256564762130954,
+    "suspicious_keyword_count": 0.0,
+    "has_hex_token": 0.0
+  },
+  "model_sha256": "0af2f0f0cd3eb630fdd9d568d3b8ae77290eee8f5088335c17c7c02f21d2e606",
+  "frozen": true,
+  "test_metrics": {
+    "threshold": 0.41,
+    "accuracy": 0.9292633887771888,
+    "precision": 0.8362756420832645,
+    "recall": 0.8254709299169426,
+    "f1": 0.8308381597639602,
+    "specificity": 0.9569268610287203,
+    "fnr": 0.17452907008305737,
+    "roc_auc": 0.9679901248493703,
+    "pr_auc": 0.9144663490178809,
+    "confusion_matrix": {
+      "tn": 66138,
+      "fp": 2977,
+      "fn": 3215,
+      "tp": 15206
+    }
+  },
+  "threshold_history": [
+    {
+      "previous": {
+        "threshold": 0.14,
+        "rule": "max_f1_subject_to_fnr",
+        "target_fnr": 0.05,
+        "precision": 0.5563838299018482,
+        "recall": 0.953178437652679,
+        "f1": 0.7026315921107259,
+        "fnr": 0.046821562347321044
+      },
+      "changed_after_test_results_seen": true,
+      "new_rule": "max_f1"
+    },
+    {
+      "previous": {
+        "threshold": 0.48,
+        "rule": "max_f1",
+        "target_fnr": null,
+        "precision": 0.8389487964866641,
+        "recall": 0.814070897345421,
+        "f1": 0.8263226410805673,
+        "fnr": 0.1859291026545789
+      },
+      "new_rule": "max_f1",
+      "reason": "re-picked on calibrated out-of-fold scores",
+      "changed_after_test_results_seen": true
+    }
+  ],
+  "calibration": {
+    "method": "isotonic",
+    "fitted_on": "out-of-fold train predictions",
+    "n": 350141,
+    "cv_ece_by_method": {
+      "isotonic": 0.0023527223826601993,
+      "platt": 0.005466378845987031
+    },
+    "oof_before": {
+      "ece": 0.022129753793867734,
+      "brier": 0.054237858144597174,
+      "log_loss": 0.1851675376007989
+    },
+    "oof_after_in_sample": {
+      "ece": 3.745810888016338e-18,
+      "brier": 0.052721681058845574,
+      "log_loss": 0.17917687100258511
+    }
+  }
+}

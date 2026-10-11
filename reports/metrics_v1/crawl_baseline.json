@@ -1,0 +1,42 @@
+{
+  "model_version": "rf-2026-10-07",
+  "threshold": 0.41,
+  "n": 921,
+  "domains": 191,
+  "false_positive_rate": 0.18783930510314875,
+  "by_rank": {
+    "1-1k": {
+      "n": 175,
+      "fpr": 0.1543
+    },
+    "1k-10k": {
+      "n": 280,
+      "fpr": 0.175
+    },
+    "10k-100k": {
+      "n": 201,
+      "fpr": 0.2587
+    },
+    "100k-1M": {
+      "n": 265,
+      "fpr": 0.1698
+    }
+  },
+  "flagged_examples": [
+    "https://coko60.ru/policy",
+    "https://onlinebusiness.lloydsbank.co.uk/business/logon/login.jsp",
+    "https://www.313.com/whois",
+    "https://online.lloydsbank.co.uk/personal/logon/login.jsp",
+    "https://app.jivox.com/loginDomain.html",
+    "https://www.ines.ro/grila",
+    "https://coko60.ru/gia-all",
+    "https://gondola.cc/privacy",
+    "https://www.newfeel.fr/visit/mspy/",
+    "https://statusbrew.com/videos",
+    "https://www.granola.ai/events",
+    "https://nikomu.com/privacy",
+    "https://www.checkpoint.com/services/training/secureacademy/",
+    "https://www.sanspo.com/sports/sports/ranking/",
+    "https://www.deviantart.com/irgweg"
+  ]
+}

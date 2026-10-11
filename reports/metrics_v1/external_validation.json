@@ -1,0 +1,37 @@
+{
+  "model_version": "rf-2026-10-07",
+  "threshold": 0.41,
+  "legitimate_tranco_by_rank": {
+    "1-1000": {
+      "n": 500,
+      "flagged": 29,
+      "flag_rate": 0.058,
+      "mean_score": 0.13197901365018222
+    },
+    "1001-10000": {
+      "n": 500,
+      "flagged": 44,
+      "flag_rate": 0.088,
+      "mean_score": 0.15729907185404807
+    },
+    "10001-100000": {
+      "n": 500,
+      "flagged": 72,
+      "flag_rate": 0.144,
+      "mean_score": 0.1965392877193703
+    },
+    "100001-1000000": {
+      "n": 500,
+      "flagged": 73,
+      "flag_rate": 0.146,
+      "mean_score": 0.18966226794219257
+    }
+  },
+  "phishing_openphish": {
+    "n": 300,
+    "flagged": 154,
+    "flag_rate": 0.5133333333333333,
+    "mean_score": 0.444423369783172
+  },
+  "phishing_recall": 0.5133333333333333
+}
