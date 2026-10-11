@@ -25,3 +25,5 @@ ml/runs/
 *.db-wal
 *.db-shm
 .claude/settings.local.json
+docs/reference/*
+!docs/reference/.gitkeep

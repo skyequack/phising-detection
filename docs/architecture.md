@@ -2,7 +2,7 @@
 
 > **Status:** see [PROGRESS.md](PROGRESS.md) for what is built. Results quoted below come from `reports/metrics/`.
 
-Source of truth: `docs/reference/Phishing_Detection_Report_VTU_Format.pdf` and `docs/reference/Phishing_Detection_Project_Synopsis.pdf` (Chapters 3-5). Choices made on top of the report are listed in [Decisions](#12-decisions-and-open-questions).
+Source of truth: `docs/reference/Phishing_Detection_Report_VTU_Format.pdf` and `docs/reference/Phishing_Detection_Project_Synopsis.pdf` (Chapters 3-5). These two PDFs are kept locally and are not in the git repository. Choices made on top of the report are listed in [Decisions](#12-decisions-and-open-questions).
 
 ## 1. Overview
 
