@@ -32,7 +32,7 @@ Copy `.env.example` to `.env` and set real values. Variables the code reads:
 | `ADMIN_TOKEN` | Bearer token for `/admin/*`. Admin stays disabled unless this is at least 16 characters | none |
 | `CORS_ORIGINS` | Allowed dashboard origins, comma separated | `http://localhost:3000,http://127.0.0.1:3000` |
 | `PHISHING_MODELS_DIR`, `PHISHING_METRICS_DIR` | Where the served model and its reports are read from | `ml/models`, `reports/metrics` |
-| `TRAIN_DATA_DIR` | Data used by `POST /admin/train` | `data/processed_v2` |
+| `TRAIN_DATA_DIR` | Data used by `POST /admin/train` | `data/training` |
 | `NEXT_PUBLIC_API_URL` | Backend URL used by the dashboard | `http://localhost:8000` |
 
 Generate a token with `python -c "import secrets; print(secrets.token_urlsafe(32))"`. The shell does not load `.env`
@@ -74,11 +74,11 @@ CC BY 4.0, see [docs/dataset/README.md](docs/dataset/README.md)) and, for v2, th
 .venv\Scripts\python -m ml.data_prep                      # clean and split the original data
 .venv\Scripts\python -m ml.phishtank_prep                 # PhishTank cleaning and time split
 .venv\Scripts\python -m ml.crawl_links                    # optional: re-run the link crawl (about 1,000 requests)
-.venv\Scripts\python -m ml.build_v2                       # build data/processed_v2
-.venv\Scripts\python -u -m ml.train --verbose --processed data\processed_v2     # about 1 hour
-.venv\Scripts\python -m ml.train --calibrate --processed data\processed_v2
-.venv\Scripts\python -m ml.evaluate --processed data\processed_v2               # add --no-ablation to skip the slow part
-.venv\Scripts\python -m ml.heldout_compare                # needs ml/models_v1 for the comparison
+.venv\Scripts\python -m ml.build_training_set             # build data/training
+.venv\Scripts\python -u -m ml.train --verbose            # about 1 hour
+.venv\Scripts\python -m ml.train --calibrate
+.venv\Scripts\python -m ml.evaluate                    # add --no-ablation to skip the slow part
+.venv\Scripts\python -m ml.heldout_eval                   # score every held-out set
 .venv\Scripts\python -m ml.benchmark                      # latency, throughput, memory
 ```
 

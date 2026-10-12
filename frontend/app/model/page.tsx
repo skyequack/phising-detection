@@ -78,7 +78,7 @@ export default function ModelPage() {
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               <Stat label="Trained" value={new Date(m.trained_at).toLocaleDateString()} />
               <Stat label="Training URLs" value={m.train_rows.toLocaleString()} />
-              <Stat label="Features" value={String(Object.keys(m.feature_importance).length)} note={`schema v${m.feature_schema_version}`} />
+              <Stat label="Features" value={String(Object.keys(m.feature_importance).length)} note={`feature schema ${m.feature_schema_version}`} />
               <Stat label="Decision threshold" value={m.threshold.threshold.toFixed(2)} note="a score at or above this is flagged" />
             </div>
             <p className="mb-0 mt-4 max-w-3xl text-sm text-muted">

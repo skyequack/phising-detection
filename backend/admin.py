@@ -32,7 +32,7 @@ ACTOR = "admin"  # one static token, so the audit actor is a label, not a user
 MIN_TOKEN_LENGTH = 16
 VERSION_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 RUNS_DIR = D.ROOT / "ml" / "runs"
-TRAIN_DATA = Path(os.environ.get("TRAIN_DATA_DIR", D.ROOT / "data" / "processed_v2"))
+TRAIN_DATA = Path(os.environ.get("TRAIN_DATA_DIR", D.ROOT / "data" / "training"))
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 _bearer = HTTPBearer(auto_error=False)

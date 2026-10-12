@@ -21,8 +21,8 @@ const EXTERNAL_LABELS: Record<string, string> = {
 
 const cell = (run: ExternalRun, key: string) => run[key] as ExternalCell;
 
-function External({ ext }: { ext: NonNullable<Metrics["external"]> }) {
-  const keys = Object.keys(ext.v2).filter((k) => typeof ext.v2[k] === "object");
+function External({ ext }: { ext: ExternalRun }) {
+  const keys = Object.keys(ext).filter((k) => typeof ext[k] === "object");
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-0 border-collapse text-left text-sm">
@@ -31,32 +31,25 @@ function External({ ext }: { ext: NonNullable<Metrics["external"]> }) {
             <th scope="col" className="py-2 pr-3 font-semibold">Data the model has never seen</th>
             <th scope="col" className="hidden px-3 py-2 text-right font-semibold sm:table-cell">URLs</th>
             <th scope="col" className="hidden px-3 py-2 font-semibold sm:table-cell">Measures</th>
-            <th scope="col" className="px-2 py-2 text-right font-semibold sm:px-3">Before</th>
-            <th scope="col" className="py-2 pl-2 text-right font-semibold sm:pl-3">Now</th>
+            <th scope="col" className="py-2 pl-2 text-right font-semibold sm:pl-3">Result</th>
           </tr>
         </thead>
         <tbody>
           {keys.map((k) => {
-            const a = cell(ext.v1, k);
-            const b = cell(ext.v2, k);
-            const caught = b.recall !== undefined;
-            const va = caught ? a.recall : a.false_positive_rate;
-            const vb = caught ? b.recall : b.false_positive_rate;
-            const better = caught ? (vb ?? 0) > (va ?? 0) : (vb ?? 0) < (va ?? 0);
+            const c = cell(ext, k);
+            const caught = c.recall !== undefined;
+            const value = caught ? c.recall : c.false_positive_rate;
             return (
               <tr key={k} className="border-t border-line">
                 <th scope="row" className="py-2 pr-3 font-normal">
                   {EXTERNAL_LABELS[k] ?? k}
                   <span className="block text-xs text-muted sm:hidden">
-                    {b.n.toLocaleString()} URLs · {caught ? "phishing caught ↑" : "wrongly flagged ↓"}
+                    {c.n.toLocaleString()} URLs · {caught ? "phishing caught ↑" : "wrongly flagged ↓"}
                   </span>
                 </th>
-                <td className="hidden px-3 py-2 text-right font-mono sm:table-cell">{b.n.toLocaleString()}</td>
+                <td className="hidden px-3 py-2 text-right font-mono sm:table-cell">{c.n.toLocaleString()}</td>
                 <td className="hidden px-3 py-2 text-xs text-muted sm:table-cell">{caught ? "phishing caught ↑" : "legitimate wrongly flagged ↓"}</td>
-                <td className="px-2 py-2 text-right font-mono text-muted sm:px-3">{va === undefined ? "—" : pct(va)}</td>
-                <td className={`py-2 pl-2 text-right font-mono sm:pl-3 ${better ? "text-safe" : "text-foreground"}`}>
-                  {vb === undefined ? "—" : pct(vb)}
-                </td>
+                <td className="py-2 pl-2 text-right font-mono sm:pl-3">{value === undefined ? "—" : pct(value)}</td>
               </tr>
             );
           })}
@@ -121,10 +114,10 @@ export default function MetricsPage() {
         <div className="space-y-4">
           {m.external && (
             <Card title="On data it has not seen"
-              note="Same model, URLs from sources it was never trained or tuned on. “Before” is the earlier model, “Now” is the one in use. This is the more realistic picture.">
+              note="Same model, URLs from sources it was never trained or tuned on. This is the more realistic picture.">
               <External ext={m.external} />
               <p className="mb-0 mt-3 max-w-3xl text-xs text-muted">
-                Higher is better for phishing caught, lower for legitimate wrongly flagged. The popular-domain rows are bare
+                Higher is better for phishing caught, lower for legitimate wrongly flagged (the arrows show the direction that is better). The popular-domain rows are bare
                 domains, and the model was trained on similar bare domains from other ranks, so they flatter it. The crawled
                 links, which include real paths, are the fairer measure of false alarms. Samples are small, so treat
                 the percentages as rough.

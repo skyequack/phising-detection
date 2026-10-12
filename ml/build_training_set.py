@@ -1,9 +1,8 @@
-"""Build the v2 training set: original data + PhishTank (older 85%) + Tranco legitimate URLs.
+"""Build the training set: original data + PhishTank (older 85%) + Tranco legitimate URLs.
 
-Usage: python -m ml.build_v2
-Output (data/processed_v2/): train.parquet, test.parquet (columns url, label, source),
-build_report.json. test.parquet is the ORIGINAL test split, unchanged, so v1 and v2
-stay comparable. Held-out sets (PhishTank newest 15%, OpenPhish, the link crawl, the
+Usage: python -m ml.build_training_set
+Output (data/training/): train.parquet, test.parquet (columns url, label, source),
+build_report.json. test.parquet is the ORIGINAL test split, unchanged. Held-out sets (PhishTank newest 15%, OpenPhish, the link crawl, the
 Tranco validation sample, tests/data/sanity_urls.json) never enter training and their
 canonical keys are removed from it. No network access.
 
@@ -28,7 +27,7 @@ from ml.crawl_links import sample_domains
 from ml.data_prep import OUT_DIR as V1, ROOT, canonicalize
 from ml.external_validation import tranco_sample
 
-OUT = ROOT / "data" / "processed_v2"
+OUT = ROOT / "data" / "training"
 SEED = 42
 BUCKET_QUOTA = [(1, 1_000, None), (1_001, 10_000, 4_000), (10_001, 100_000, 20_000), (100_001, 1_000_000, 35_000)]
 

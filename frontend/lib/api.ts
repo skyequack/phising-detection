@@ -70,7 +70,7 @@ export type Metrics = {
   ablation: AblationRow[];
   calibration: { summary: { raw: Calibration; final: Calibration; method: string } | null; reliability: ReliabilityRow[] };
   curves: Record<string, CurveSet> | null;
-  external: { v1: ExternalRun; v2: ExternalRun } | null;
+  external: ExternalRun | null;
 };
 
 export type HistoryItem = {

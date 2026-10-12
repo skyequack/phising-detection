@@ -143,7 +143,7 @@ Raw URLs are not stored, only an HMAC-SHA256 of the canonicalized URL keyed by `
 | `GET /models` | public | Model info (algorithm, training date, metrics). | built |
 | `GET /predictions` | public | Prediction history (hashes only), `limit` 1 to 100, `offset`, newest first. | built |
 | `GET /metrics/{model_version}` | public | Confusion matrix, ROC/PR data, comparison table. | built (`GET /metrics` for the active model; `/metrics/{version}` returns the active model's files, or the stored test metrics for an older registered version, 404 otherwise) |
-| `POST /admin/train`, `GET /admin/train/status` | **admin only** | Starts one training run in a child process with fixed arguments (data from `TRAIN_DATA_DIR`, default `data/processed_v2`); output goes to `ml/runs/<timestamp>/`, the new model is registered as inactive. 409 while a run is active. | built |
+| `POST /admin/train`, `GET /admin/train/status` | **admin only** | Starts one training run in a child process with fixed arguments (data from `TRAIN_DATA_DIR`, default `data/training`); output goes to `ml/runs/<timestamp>/`, the new model is registered as inactive. 409 while a run is active. | built |
 | `GET /admin/models`, `POST /admin/models/{version}/activate` | **admin only** | List registered models; load a registered model's artifacts and make it the served one (persists across restarts). | built |
 | `GET /admin/audit-logs` | **admin only** | Paged audit trail. | built |
 
@@ -202,17 +202,15 @@ phising-detection/
 │   ├── train.py         tuning, selection, threshold, freeze (--calibrate, --verbose, --processed/--models/...)
 │   ├── calibration.py   PrefitCalibrated wrapper, ECE, reliability tables
 │   ├── evaluate.py      test metrics, calibration report, curves, figures, ablation
-│   ├── phishtank_prep.py, crawl_links.py, build_v2.py   second data sources and the v2 training set
-│   ├── sanity_check.py, external_validation.py, phishtank_baseline.py, crawl_baseline.py, heldout_compare.py   checks on data never trained on
+│   ├── phishtank_prep.py, crawl_links.py, build_training_set.py   second data sources and the training set
+│   ├── sanity_check.py, external_validation.py, heldout_eval.py   checks on data never trained on
 │   ├── benchmark.py     latency, throughput, memory (writes reports/metrics/performance.json)
 │   ├── models/          model in use: phishing_model.joblib (git-ignored), candidate_*.joblib, metadata.json
-│   ├── models_v1/       the earlier model (metadata only in git)
 │   └── runs/            output of POST /admin/train (git-ignored)
-├── data/                raw, processed, processed_v2, external (all git-ignored except .gitkeep files)
+├── data/                raw, processed, training, external (all git-ignored except .gitkeep files)
 ├── tests/               280 tests, see docs/testing/README.md; data/sanity_urls.json
 ├── reports/
-│   ├── figures/, metrics/   results for the model in use
-│   └── figures_v1/, metrics_v1/   the earlier model's results
+│   └── figures/, metrics/   results for the model in use
 └── docs/
     ├── architecture.md, PROGRESS.md (checklist and disclosures)
     ├── reference/       original report + synopsis PDFs

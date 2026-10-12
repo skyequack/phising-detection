@@ -85,7 +85,7 @@ def summary(ms: list[float]) -> dict:
 
 def sample_urls(n: int) -> list[str]:
     """Real URLs from the held-out test split when present, else the sanity set."""
-    test = ROOT / "data" / "processed_v2" / "test.parquet"
+    test = ROOT / "data" / "training" / "test.parquet"
     if test.exists():
         return pd.read_parquet(test)["url"].sample(n, random_state=0).tolist()
     s = json.loads((ROOT / "tests" / "data" / "sanity_urls.json").read_text(encoding="utf-8"))

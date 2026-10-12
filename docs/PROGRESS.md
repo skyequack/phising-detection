@@ -1,8 +1,8 @@
 # Progress
 
-Checklist against the implementation plan (`~/.claude/plans/okay-now-make-an-mellow-oasis.md`). Last updated 2026-10-10. `[x]` done and verified, `[~]` partly done or needs a decision, `[ ]` not started.
+Checklist against the implementation plan (`~/.claude/plans/okay-now-make-an-mellow-oasis.md`). Last updated 2026-10-12. `[x]` done and verified, `[~]` partly done or needs a decision, `[ ]` not started.
 
-Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f2017`, shortcut fix and retrain `58084cf`, threshold change `85f65be`. 84 tests pass (`.venv\Scripts\python -m pytest -q`). The served model is now **v2** (see Generalization below); v1 is archived in `ml/models_v1`, `reports/metrics_v1`, `reports/figures_v1`.
+Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f2017`, shortcut fix and retrain `58084cf`, threshold change `85f65be`. 280 tests pass (`.venv\Scripts\python -m pytest -q`). The served model is now **v2** (see Generalization below); the v1 artifacts were removed from the working tree before submission and remain in git history up to `a9d4b09`.
 
 ## Phase 0: Environment
 - [x] Python 3.12 `.venv`, `pyproject.toml` (packages `ml`, `backend`), pinned `requirements.txt`
@@ -29,7 +29,7 @@ Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Ph
 - [x] `tests/test_train.py`
 - [x] Calibration (`ml/calibration.py`, `python -m ml.train --calibrate`): isotonic fitted on out-of-fold train predictions; test ECE 0.0246 to 0.0032; threshold re-picked on calibrated scores (0.41); `tests/test_calibration.py`
 - [ ] Re-run `python -m ml.train` with the same seed and confirm identical metrics (about 1 hour)
-- [x] **Generalization decision (2026-10-10): retrain as v2, accept the remaining limitation.** Added PhishTank (older 85%) and Tranco legitimate URLs with template paths; held-out sets (PhishTank newest 15%, OpenPhish, crawled links, Tranco validation, sanity) never entered training. Scripts: `ml/phishtank_prep.py`, `ml/crawl_links.py`, `ml/build_v2.py`, `ml/heldout_compare.py`. Data in `data/processed_v2/`, `data/external/` (git-ignored). Reproduce: `python -m ml.build_v2`, then `python -m ml.train --verbose --processed data\processed_v2`, `--calibrate`, `python -m ml.evaluate --no-ablation --processed data\processed_v2` (paths for models/metrics/figures default to the promoted dirs).
+- [x] **Generalization decision (2026-10-10): retrain as v2, accept the remaining limitation.** Added PhishTank (older 85%) and Tranco legitimate URLs with template paths; held-out sets (PhishTank newest 15%, OpenPhish, crawled links, Tranco validation, sanity) never entered training. Scripts: `ml/phishtank_prep.py`, `ml/crawl_links.py`, `ml/build_training_set.py`, `ml/heldout_eval.py`. Data in `data/training/`, `data/external/` (git-ignored). Reproduce: `python -m ml.build_training_set`, then `python -m ml.train --verbose`, `--calibrate`, `python -m ml.evaluate --no-ablation` (paths for models/metrics/figures default to the promoted dirs).
 - [x] Ablation for v2 (`reports/metrics/ablation.csv`, `reports/figures/ablation.png`): largest single-group loss is `char_count` (PR-AUC -0.059, F1 -0.059), then `host` (-0.026); `length` (-0.001) and `query_path`/`keyword` (under -0.01) matter little alone. Removing the top 4 groups cumulatively cuts PR-AUC from 0.90 to 0.47. Dropping `entropy` raised recall slightly (+0.016). Model hash re-verified after the run.
 
 ## Phase 4: Prediction library
@@ -81,7 +81,7 @@ Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Ph
 | Hand-made legitimate (40) / phishing (20) | FP / recall | 25% / 95% | 20% / 85% |
 | Tranco bare domains (2,000) | false positives | 5.8 to 14.6% | 0.8 to 3.8% (partly in-distribution) |
 
-Source: `reports/metrics/heldout_compare.json`, `test_metrics.json`.
+Source: v2 column from `reports/metrics/heldout_results.json` and `test_metrics.json`; v1 column from the v1 archive in git history (`a9d4b09`).
 
 ## Disclose in the report
 - First models learned a scheme/`www.` shortcut (F1 about 0.97); fixed by URL normalization; honest F1 about 0.83.
@@ -90,7 +90,7 @@ Source: `reports/metrics/heldout_compare.json`, `test_metrics.json`.
 - Probabilities are calibrated in-distribution only (test ECE 0.003) and are overconfident on real-world URLs the dataset does not represent.
 - Subdomain counting uses a small suffix list, not a public-suffix database.
 - v2 is the model served. Its original-test F1 (0.808) is lower than v1 (0.831); recall on newer phishing is about 20 points higher. v2's design was guided by external held-out sets, but the original test split had already been read for v1, so it is not a pristine evaluation for v2.
-- v2 legitimate training data includes ~59k Tranco URLs with template-generated paths (`ml/build_v2.py`), not real paths. On real crawled links the model still flags 14.8%; some are login pages. The crawl covers 191 of 500 sampled domains (front-page links only).
+- v2 legitimate training data includes ~59k Tranco URLs with template-generated paths (`ml/build_training_set.py`), not real paths. On real crawled links the model still flags 14.8%; some are login pages. The crawl covers 191 of 500 sampled domains (front-page links only).
 - v2 threshold is max F1 on calibrated out-of-fold scores (0.43), carried over from the v1 rule change; `changed_after_test_results_seen` is false for v2.
 - New external sources (PhishTank, Tranco, OpenPhish community feed): terms checked 2026-10-08 and recorded in `docs/dataset/README.md`. PhishTank's licence (a Cisco agreement) could not be read and is still unverified; OpenPhish forbids redistribution and derivative works, so keep its URLs out of the report and repository; cite all three plus the Tranco paper.
 - Performance (one machine, loopback, one uvicorn worker; `reports/metrics/performance.json`): `POST /predict` p50 30 ms, p95 32 ms, p99 85 ms sequentially (n=300), including the explanation and the database write; feature extraction about 20,000 URLs/s. The served model is **1.1 GB on disk and about 1.34 GB resident** (Random Forest, 300 trees, depth 30, min leaf 2); load takes about 2 s. **Under 8 concurrent clients throughput drops to about 13 requests/s** (p95 312 ms) because requests contend for the GIL, so this is not a multi-user design as built. Serving sets the forest to one thread (`n_jobs=1`), which halved single-request latency (48 to 25 ms); it does not change predictions.

@@ -129,10 +129,10 @@ Accessed 2026-10-08, stored git-ignored under `data/external/` and never edited.
 | OpenPhish community feed (`feed.txt`) | `data/external/openphish/` | `c00074e37dce95c9eb44ca64d033b82b5373154f9e4078f8f6eb39e9cb2e47a7` | 14 KB; 300 URLs | External phishing test only, never trained on |
 | Link crawl (`ml/crawl_links.py`) | `data/external/crawl/` | n/a | 921 same-site links from the front pages of 191 of 500 sampled Tranco domains (robots.txt honoured, one page per domain) | External legitimate test only |
 
-Derived files are in `data/processed/` (`phishtank_train.parquet`, `phishtank_heldout.parquet`, `phishtank_report.json`) and `data/processed_v2/` (`train.parquet`, `test.parquet`, `build_report.json`). Scripts: `ml/phishtank_prep.py`, `ml/crawl_links.py`, `ml/build_v2.py`. The PhishTank cleaning applies the same rules as the original data, plus HTML-unescaping and a 4,096-character limit; 2,403 of 69,623 rows were dropped (2,370 duplicates, 31 already in the original dataset, 1 in OpenPhish, 1 control characters, 2 too long, with `too_long` now part of `ml.data_prep`).
+Derived files are in `data/processed/` (`phishtank_train.parquet`, `phishtank_heldout.parquet`, `phishtank_report.json`) and `data/training/` (`train.parquet`, `test.parquet`, `build_report.json`). Scripts: `ml/phishtank_prep.py`, `ml/crawl_links.py`, `ml/build_training_set.py`. The PhishTank cleaning applies the same rules as the original data, plus HTML-unescaping and a 4,096-character limit; 2,403 of 69,623 rows were dropped (2,370 duplicates, 31 already in the original dataset, 1 in OpenPhish, 1 control characters, 2 too long, with `too_long` now part of `ml.data_prep`).
 
 Caveats:
-- The Tranco paths are template-generated (`ml/build_v2.py`), not real URLs. The crawl is the check on whether they generalise.
+- The Tranco paths are template-generated (`ml/build_training_set.py`), not real URLs. The crawl is the check on whether they generalise.
 - The Tranco file used is the default list downloaded on 2026-10-08; no Tranco list ID or permalink was recorded, so the exact list cannot be re-fetched. Use the SHA-256 above to identify it.
 - PhishTank was downloaded without an application key (the site asks automated downloads to register one and limits keyless downloads). One download was made.
 

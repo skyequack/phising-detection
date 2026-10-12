@@ -38,7 +38,7 @@ from ml.calibration import PrefitCalibrated, calibration_metrics, choose_method,
 from ml.preprocessing import ALGORITHMS, INTERPRETABILITY, NAMES, SEARCH_SPACES, SEED, build_pipeline, set_params
 
 ROOT = Path(__file__).resolve().parents[1]
-PROCESSED = ROOT / "data" / "processed"
+PROCESSED = ROOT / "data" / "training"  # built by ml.build_training_set
 MODELS = ROOT / "ml" / "models"
 METRICS = ROOT / "reports" / "metrics"
 FIGURES = ROOT / "reports" / "figures"
@@ -338,7 +338,7 @@ def main() -> None:
         print(rethreshold(None if a.rethreshold == "max_f1" else TARGET_FNR, a.models, a.metrics))
         return
     if a.quick:  # keep smoke-test output away from the real artifacts
-        tmp = ROOT / "data" / "processed" / "quick"
+        tmp = PROCESSED / "quick"
         run(a.n_iter, a.svm_cap, True, models=tmp / "models", metrics=tmp / "metrics", figures=tmp / "figures")
     else:
         run(a.n_iter, a.svm_cap, resume=a.resume, processed=a.processed, models=a.models,

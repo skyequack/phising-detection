@@ -133,7 +133,7 @@ class Predictor:
             "calibration": {"summary": _read_json(d / "calibration.json"),
                             "reliability": _read_csv(d / "calibration_test.csv")},
             "curves": _read_json(d / "curves.json"),
-            "external": _read_json(d / "heldout_compare.json"),
+            "external": _read_json(d / "heldout_results.json"),
         }
 
 
