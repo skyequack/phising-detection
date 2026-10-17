@@ -1,0 +1,2 @@
+# Keep input data byte-identical (checksums are recorded in docs/dataset/README.md)
+data/** -text

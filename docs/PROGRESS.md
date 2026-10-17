@@ -1,6 +1,6 @@
 # Progress
 
-Checklist against the implementation plan (`~/.claude/plans/okay-now-make-an-mellow-oasis.md`). Last updated 2026-10-12. `[x]` done and verified, `[~]` partly done or needs a decision, `[ ]` not started.
+Checklist against the implementation plan. Last updated 2026-10-12. `[x]` done and verified, `[~]` partly done or needs a decision, `[ ]` not started.
 
 Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Phase 2 `9c87d07` / `93529b1`, Phase 3 `b8f2017`, shortcut fix and retrain `58084cf`, threshold change `85f65be`. 280 tests pass (`.venv\Scripts\python -m pytest -q`). The served model is now **v2** (see Generalization below); the v1 artifacts were removed from the working tree before submission and remain in git history up to `a9d4b09`.
 
@@ -53,7 +53,7 @@ Latest commits (calibration is the newest, see `git log`): Phase 1 `1e4d6f8`, Ph
 
 ## Phase 7: Frontend
 - [x] Next.js app scaffolded; typed API client; Detector page with result, gauge, contribution chart and model panel; type-checks (`tsc --noEmit`)
-- [x] Verified in the browser against the live backend on 2026-10-11 (start both with `.claude/launch.json`: `backend` on 8000, `frontend` on 3000): Detector, History, Model and Metrics render, no console errors, no horizontal overflow at 375 px wide
+- [x] Verified in the browser against the live backend on 2026-10-11 (backend on 8000, frontend on 3000): Detector, History, Model and Metrics render, no console errors, no horizontal overflow at 375 px wide
 - [x] History (`app/history`, paged, hashes only), Model (`app/model`) and Metrics (`app/metrics`: out-of-sample results, test metrics and confusion matrix, threshold sweep, algorithm comparison, ROC and PR curves, calibration, ablation) pages, nav bar, per-page titles; `/metrics` now also returns comparison, ablation, calibration, curves and the external results (`reports/metrics/curves.json` is written by `ml.evaluate`); no automated frontend tests yet (checked with `tsc`, `eslint` and by hand)
 
 ## Phase 8: Documentation

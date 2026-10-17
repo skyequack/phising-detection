@@ -1,0 +1,28 @@
+{
+  "seed": 7,
+  "domains": 500,
+  "links_per_domain": 5,
+  "timeout_s": 10.0,
+  "max_bytes": 1000000,
+  "workers": 8,
+  "max_redirects": 3,
+  "user_agent": "phishing-detection-research/0.1 (academic URL-dataset study; front page only; honours robots.txt)",
+  "pages_per_domain": 1,
+  "respects_robots_txt": true,
+  "links": 921,
+  "domains_with_links": 191,
+  "outcomes": {
+    "ok": 241,
+    "ConnectError": 123,
+    "status_403_or_not_html": 67,
+    "ConnectTimeout": 24,
+    "robots_disallow": 14,
+    "status_404_or_not_html": 9,
+    "ReadTimeout": 9,
+    "RemoteProtocolError": 6,
+    "status_429_or_not_html": 2,
+    "TooManyRedirects": 2,
+    "status_202_or_not_html": 2,
+    "status_402_or_not_html": 1
+  }
+}
